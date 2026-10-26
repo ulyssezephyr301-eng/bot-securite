@@ -3,7 +3,7 @@ const config = require('./config');
 const base = require('./database');
 
 // ✍️ Signature : ajoute « U-lis » en bas de CHAQUE embed envoyé par le bot
-const SIGNATURE = 'U-lis';
+const SIGNATURE = 'Dev by U-lis ⚜';
 const toJSONOriginal = EmbedBuilder.prototype.toJSON;
 EmbedBuilder.prototype.toJSON = function () {
   const data = toJSONOriginal.call(this);
