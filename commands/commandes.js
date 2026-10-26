@@ -21,8 +21,31 @@ const CATEGORIES = [
 
 const NIVEAU_AIDE = () => config.NIVEAU_MIN.aide ?? 1;
 
+// IDs des commandes, nécessaires pour que /commande soit cliquable dans Discord
+let cacheIds = null;
+let cacheDate = 0;
+async function idsCommandes(client) {
+  if (cacheIds && Date.now() - cacheDate < 10 * 60_000) return cacheIds;
+  try {
+    const cmds = await client.application.commands.fetch();
+    cacheIds = new Map(cmds.map(c => [c.name, c.id]));
+    cacheDate = Date.now();
+  } catch (err) {
+    console.error('Impossible de récupérer les IDs des commandes :', err.message);
+    cacheIds = cacheIds ?? new Map();
+  }
+  return cacheIds;
+}
+
+// </nom:id> = commande cliquable ; sinon simple texte
+function mention(ids, nom, sous = null) {
+  const texte = sous ? `${nom} ${sous}` : nom;
+  const id = ids.get(nom);
+  return id ? `</${texte}:${id}>` : `\`/${texte}\``;
+}
+
 // Construit les lignes à partir des vraies commandes enregistrées dans le bot
-function lignes(client, nom, action) {
+function lignes(client, ids, nom, action) {
   const cmd = client.commands.get(nom);
   if (!cmd) return [];
   const json = cmd.data.toJSON();
@@ -31,8 +54,8 @@ function lignes(client, nom, action) {
     : grade(action);
   const suffixe = g ? ` — **${g}**` : '';
   const subs = (json.options ?? []).filter(o => o.type === 1);
-  if (subs.length) return subs.map(s => `\`/${nom} ${s.name}\` — ${s.description}${suffixe}`);
-  return [`\`/${nom}\` — ${json.description}${suffixe}`];
+  if (subs.length) return subs.map(s => `${mention(ids, nom, s.name)} — ${s.description}${suffixe}`);
+  return [`${mention(ids, nom)} — ${json.description}${suffixe}`];
 }
 
 module.exports = {
@@ -51,6 +74,8 @@ module.exports = {
       return i.reply({ content: "❌ Seuls les Administrateurs et plus peuvent publier la liste dans le salon.", ...EPH });
     }
 
+    const ids = await idsCommandes(i.client);
+
     const embed = new EmbedBuilder()
       .setColor(0x3498db)
       .setTitle('🛡️ Commandes du bot')
@@ -58,13 +83,13 @@ module.exports = {
 
     const connues = new Set();
     for (const cat of CATEGORIES) {
-      const l = cat.cmds.flatMap(([nom, action]) => { connues.add(nom); return lignes(i.client, nom, action); });
+      const l = cat.cmds.flatMap(([nom, action]) => { connues.add(nom); return lignes(i.client, ids, nom, action); });
       if (l.length) embed.addFields({ name: cat.titre, value: l.join('\n').slice(0, 1024) });
     }
 
     // Commandes ajoutées plus tard et pas encore classées
     const autres = [...i.client.commands.keys()].filter(n => !connues.has(n))
-      .flatMap(n => lignes(i.client, n, null));
+      .flatMap(n => lignes(i.client, ids, n, null));
     if (autres.length) embed.addFields({ name: '➕ Autres', value: autres.join('\n').slice(0, 1024) });
 
     const mutes = [1, 2, 3, 4, 5].map(n => {
