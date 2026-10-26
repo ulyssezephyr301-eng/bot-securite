@@ -2,6 +2,17 @@ const { EmbedBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js'
 const config = require('./config');
 const base = require('./database');
 
+// ✍️ Signature : ajoute « U-lis » en bas de CHAQUE embed envoyé par le bot
+const SIGNATURE = 'U-lis';
+const toJSONOriginal = EmbedBuilder.prototype.toJSON;
+EmbedBuilder.prototype.toJSON = function () {
+  const data = toJSONOriginal.call(this);
+  const texte = data.footer?.text;
+  if (!texte) data.footer = { ...(data.footer ?? {}), text: SIGNATURE };
+  else if (!texte.includes(SIGNATURE)) data.footer = { ...data.footer, text: `${texte} • ${SIGNATURE}` };
+  return data;
+};
+
 const EPH = { flags: MessageFlags.Ephemeral };
 const LABELS = { warn: 'Avertissement', mute: 'Mute', kick: 'Expulsion', ban: 'Bannissement' };
 const COULEURS = {
