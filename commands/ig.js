@@ -9,7 +9,7 @@ const DEFAUTS = { ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igComman
 const ACTION_DE = {
   serveur: 'ig', joueurs: 'ig', staff: 'ig', file: 'ig',
   h: 'igMessage', m: 'igMessage', pm: 'igMessage',
-  kick: 'igKick', ban: 'igBan', unban: 'igUnban', commande: 'igCommande',
+  kick: 'igKick', ban: 'igBan', unban: 'igUnban', commande: 'igCommande', diagnostic: 'igCommande',
 };
 const niveauRequis = (action) => config.NIVEAU_MIN[action] ?? DEFAUTS[action];
 
@@ -208,6 +208,32 @@ async function commandeLibre(i) {
   return i.editReply(`✅ Commande envoyée : \`${commande}\`${res?.message ? `\nRéponse de l'API : ${String(res.message).slice(0, 300)}` : ''}`);
 }
 
+/* ---------- Diagnostic de la liaison (Fondateur) ---------- */
+async function diagnostic(i) {
+  const d = await erlc.diagnostic();
+  const embed = new EmbedBuilder()
+    .setColor(d.test?.ok ? COULEURS.unmute : COULEURS.alerte)
+    .setTitle('🔧 Diagnostic de la liaison ER:LC');
+  if (!d.cle.presente) {
+    embed.addFields({ name: 'Clé API', value: '❌ Absente : la variable `ERLC_API_KEY` est vide ou mal nommée sur Render (ou le service n\'a pas été redéployé après l\'ajout).' });
+  } else {
+    embed.addFields({
+      name: 'Clé API',
+      value: `Présente (${d.cle.longueur} caractères).` + (d.cle.nettoyee ? '\n⚠️ Des espaces, guillemets ou un préfixe (ex : `ERLC_API_KEY=`) ont été retirés automatiquement : corrige quand même la valeur sur Render.' : ''),
+    });
+    embed.addFields(
+      { name: 'Adresse utilisée', value: d.base ?? '—', inline: true },
+      {
+        name: 'Test de connexion',
+        value: d.test.ok
+          ? `✅ Réussi : « ${d.test.nom ?? 'serveur'} », ${d.test.joueurs ?? 0}/${d.test.maxJoueurs ?? '?'} joueurs.`
+          : `❌ ${d.test.message}`,
+      },
+    );
+  }
+  return i.editReply({ embeds: [embed] });
+}
+
 /* ---------- Définition ---------- */
 module.exports = {
   data: new SlashCommandBuilder()
@@ -231,6 +257,7 @@ module.exports = {
       .addStringOption(o => optJoueur(o, 'Pseudo Roblox exact du joueur (connecté ou non)')))
     .addSubcommand(s => s.setName('unban').setDescription('Débannit un joueur du serveur ER:LC (:unban), par son pseudo Roblox ou son ID')
       .addStringOption(o => optJoueur(o, 'Pseudo Roblox exact ou ID Roblox du joueur banni')))
+    .addSubcommand(s => s.setName('diagnostic').setDescription('Fondateur : teste la liaison avec ER:LC (clé, serveur) et explique le problème trouvé'))
     .addSubcommand(s => s.setName('commande').setDescription('Fondateur : exécute une commande ER:LC libre (ex : :time 12). Certaines sont bloquées')
       .addStringOption(o => o.setName('texte').setDescription('Commande complète, avec ou sans « : » au début (200 caractères maximum)').setRequired(true).setMaxLength(200))),
 
@@ -242,8 +269,8 @@ module.exports = {
     if (niveau(i.member) < niveauRequis(ACTION_DE[sub])) {
       return i.reply({ content: "❌ Tu n'as pas la permission d'utiliser cette commande.", ...EPH });
     }
-    if (!erlc.configure()) {
-      return i.reply({ content: "❌ L'API ER:LC n'est pas configurée (variable ERLC_API_KEY manquante sur Render).", ...EPH });
+    if (sub !== 'diagnostic' && !erlc.configure()) {
+      return i.reply({ content: "❌ L'API ER:LC n'est pas configurée (variable ERLC_API_KEY manquante sur Render). Fais /ig diagnostic.", ...EPH });
     }
 
     await i.deferReply(EPH);
@@ -260,6 +287,7 @@ module.exports = {
         case 'ban': return await sanctionJeu(i, 'ban');
         case 'unban': return await sanctionJeu(i, 'unban');
         case 'commande': return await commandeLibre(i);
+        case 'diagnostic': return await diagnostic(i);
       }
     } catch (err) {
       if (err instanceof erlc.ErlcError) return i.editReply(`❌ ${err.message}`);

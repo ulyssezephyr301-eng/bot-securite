@@ -54,8 +54,9 @@ const GROUPES_IG = [
     },
   },
   {
-    titre: '⚙️ Commande libre',
+    titre: '⚙️ Avancé (Fondateur)',
     cmds: {
+      diagnostic: ['igCommande', "Teste la liaison avec ER:LC (clé API, serveur) et explique le problème trouvé, par exemple une clé refusée ou un serveur vide."],
       commande: ['igCommande', "Exécute n'importe quelle commande ER:LC, par exemple :time 12. Les commandes qui donnent des grades en jeu, ban, kick et shutdown sont bloquées."],
     },
   },
