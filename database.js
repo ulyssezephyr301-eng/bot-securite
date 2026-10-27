@@ -41,6 +41,26 @@ async function initDatabase() {
       content TEXT NOT NULL,
       created_at INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS mots_filtres (
+      guild_id TEXT NOT NULL,
+      mot TEXT NOT NULL,
+      niveau TEXT NOT NULL,
+      PRIMARY KEY (guild_id, mot)
+    )`,
+    `CREATE TABLE IF NOT EXISTS liens_roblox (
+      discord_id TEXT PRIMARY KEY,
+      roblox_id TEXT NOT NULL,
+      roblox_name TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS jeu_attente (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      commande TEXT NOT NULL,
+      description TEXT,
+      essais INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS settings (
       guild_id TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -98,6 +118,24 @@ async function desactiverSanctions(userId, type) {
 
 async function desactiverParId(id) {
   await db.execute({ sql: `UPDATE sanctions SET active = 0 WHERE id = ?`, args: [id] });
+}
+
+async function getMutesActifs(now) {
+  const r = await db.execute({
+    sql: `SELECT * FROM sanctions WHERE type = 'mute' AND active = 1 AND (expires_at IS NULL OR expires_at > ?)
+          ORDER BY expires_at ASC LIMIT 50`,
+    args: [now],
+  });
+  return r.rows;
+}
+
+// Nombre de sanctions lourdes (mute / expulsion / ban) données par un modérateur depuis une date
+async function countSanctionsParModerateur(moderatorId, depuis) {
+  const r = await db.execute({
+    sql: `SELECT COUNT(*) AS n FROM sanctions WHERE moderator_id = ? AND created_at >= ? AND type IN ('mute', 'kick', 'ban')`,
+    args: [moderatorId, depuis],
+  });
+  return Number(r.rows[0].n);
 }
 
 async function bansExpires(now) {
@@ -159,6 +197,59 @@ async function countNotes(userId) {
   return Number(r.rows[0].n);
 }
 
+/* ---------- Mots filtrés (niveau : 'interdit', 'grave' ou 'autorise' = retiré de la liste de base) ---------- */
+async function getMots(guildId) {
+  const r = await db.execute({ sql: `SELECT mot, niveau FROM mots_filtres WHERE guild_id = ?`, args: [guildId] });
+  return r.rows;
+}
+
+async function setMot(guildId, mot, niveau) {
+  await db.execute({
+    sql: `INSERT INTO mots_filtres (guild_id, mot, niveau) VALUES (?, ?, ?)
+          ON CONFLICT(guild_id, mot) DO UPDATE SET niveau = excluded.niveau`,
+    args: [guildId, mot, niveau],
+  });
+}
+
+async function deleteMot(guildId, mot) {
+  await db.execute({ sql: `DELETE FROM mots_filtres WHERE guild_id = ? AND mot = ?`, args: [guildId, mot] });
+}
+
+/* ---------- Comptes Roblox connus (pour débannir en jeu après un ban Discord) ---------- */
+async function setLienRoblox(discordId, robloxId, robloxName) {
+  await db.execute({
+    sql: `INSERT INTO liens_roblox (discord_id, roblox_id, roblox_name, updated_at) VALUES (?, ?, ?, ?)
+          ON CONFLICT(discord_id) DO UPDATE SET roblox_id = excluded.roblox_id, roblox_name = excluded.roblox_name, updated_at = excluded.updated_at`,
+    args: [discordId, robloxId, robloxName, Date.now()],
+  });
+}
+
+async function getLienRoblox(discordId) {
+  const r = await db.execute({ sql: `SELECT * FROM liens_roblox WHERE discord_id = ?`, args: [discordId] });
+  return r.rows[0] ?? null;
+}
+
+/* ---------- Commandes ER:LC en attente (serveur vide) ---------- */
+async function addAttenteJeu({ guildId, commande, description }) {
+  await db.execute({
+    sql: `INSERT INTO jeu_attente (guild_id, commande, description, essais, created_at) VALUES (?, ?, ?, 0, ?)`,
+    args: [guildId, commande, description ?? null, Date.now()],
+  });
+}
+
+async function getAttenteJeu(limit = 5) {
+  const r = await db.execute({ sql: `SELECT * FROM jeu_attente ORDER BY id ASC LIMIT ?`, args: [limit] });
+  return r.rows;
+}
+
+async function deleteAttenteJeu(id) {
+  await db.execute({ sql: `DELETE FROM jeu_attente WHERE id = ?`, args: [id] });
+}
+
+async function incrAttenteJeu(id) {
+  await db.execute({ sql: `UPDATE jeu_attente SET essais = essais + 1 WHERE id = ?`, args: [id] });
+}
+
 /* ---------- Réglages ---------- */
 async function getSetting(guildId, key) {
   const r = await db.execute({ sql: `SELECT value FROM settings WHERE guild_id = ? AND key = ?`, args: [guildId, key] });
@@ -176,8 +267,10 @@ async function setSetting(guildId, key, value) {
 module.exports = {
   db, initDatabase,
   addSanction, getSanctions, countSanctions, getSanction, deleteSanction,
-  desactiverSanctions, desactiverParId, bansExpires,
+  desactiverSanctions, desactiverParId, bansExpires, getMutesActifs, countSanctionsParModerateur,
   addDemande, getDemande, setDemandeMessage, claimDemande, resetDemande,
   addNote, getNotes, countNotes,
+  getMots, setMot, deleteMot,
+  setLienRoblox, getLienRoblox, addAttenteJeu, getAttenteJeu, deleteAttenteJeu, incrAttenteJeu,
   getSetting, setSetting,
 };

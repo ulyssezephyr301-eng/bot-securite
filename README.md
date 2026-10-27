@@ -19,8 +19,10 @@
 - `/config voir` — vérifier
 
 ## Commandes
-Sanctions : /warn /mute /unmute /kick /ban /unban
-Historique : /sanction @membre (boutons 🗑️ numérotés + pages)
+Sanctions : /sanction-note /sanction-warn /sanction-mute /sanction-unmute /sanction-expulser /sanction-ban /sanction-unban
+Dossier : /sanction voir @membre (sanctions + notes, boutons 🗑️ numérotés + pages), /sanction mute-actif (mutes en cours)
+Mots interdits : /mots ajouter|retirer|liste
+Aide : /commandes
 Demandes : /demande-sanction (boutons Accepter / Refuser)
 Staff : /note ajouter|voir, /clear nombre|entre, /info-joueur, /lockdown, /unlock, /slowmode, /config
 
@@ -37,3 +39,21 @@ paliers d'avertissements (3 = mute 1h, 5 = kick par défaut), débannissement au
 
 ## Grades
 Guide(1) < Modérateur(2) < Administrateur(3) < Exécutif(4) < Fondateur(5). Réglages dans `NIVEAU_MIN` et `MUTE_MAX_PAR_NIVEAU`.
+
+## Salons à configurer sur chaque serveur
+- `/config logs` : logs généraux et alertes de sécurité (raid, anti-nuke...)
+- `/config sanctions` : toutes les sanctions
+- `/config commandes` : toutes les commandes exécutées, réussies ou échouées
+- `/config demandes` : demandes de sanction
+Garde ces salons privés (réservés au staff).
+
+## Demandes de sanction
+Chaque /demande-sanction crée un fil de discussion. Un refus ouvre une fenêtre qui demande une raison
+(postée dans le fil, affichée sur la demande et envoyée en MP au demandeur).
+Le bot a besoin des permissions « Créer des fils publics » et « Envoyer des messages dans les fils » dans le salon des demandes.
+
+## Commandes en jeu (ER:LC)
+- Variable à ajouter sur Render : `ERLC_API_KEY` (la clé API du serveur ER:LC). Ne jamais la mettre dans le code ni sur GitHub.
+- `/ig serveur|joueurs|staff|file` (infos), `/ig h|m|pm` (messages), `/ig kick|ban|unban` (sanctions), `/ig commande` (Fondateur).
+- Un `/sanction-ban` sur le Discord principal bannit aussi en jeu ; `/sanction-unban` débannit en jeu. Serveur ER:LC vide : mis en attente.
+- Le statut du bot alterne entre « N joueurs In Game » et « Surveille N personnes » (réglages dans `config.js` > `ERLC`).

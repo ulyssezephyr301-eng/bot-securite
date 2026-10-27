@@ -1,9 +1,10 @@
 const { EmbedBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const config = require('./config');
 const base = require('./database');
+const erlc = require('./erlc');
 
 // ✍️ Signature : ajoute « U-lis » en bas de CHAQUE embed envoyé par le bot
-const SIGNATURE = 'Dev by U-lis ⚜';
+const SIGNATURE = 'U-lis';
 const toJSONOriginal = EmbedBuilder.prototype.toJSON;
 EmbedBuilder.prototype.toJSON = function () {
   const data = toJSONOriginal.call(this);
@@ -73,16 +74,48 @@ async function salonConfigure(guild, cle, defaut) {
   return salon && salon.isTextBased() ? salon : null;
 }
 
-async function envoyerLog(guild, embed) {
-  const salon = await salonConfigure(guild, 'logs_channel', config.LOG_CHANNEL_ID);
-  if (salon) await salon.send({ embeds: [embed] }).catch(() => {});
+// Rôles à mentionner en cas d'alerte grave (niveau ALERTES_PING_NIVEAU et plus, présents sur ce serveur)
+function rolesAlerte(guild) {
+  const ids = [];
+  for (const [lvl, liste] of Object.entries(config.ROLES_NIVEAUX)) {
+    if (Number(lvl) >= config.ALERTES_PING_NIVEAU) for (const id of liste) if (guild.roles.cache.has(id)) ids.push(id);
+  }
+  return ids;
+}
+
+async function envoyerDans(guild, cle, defaut, embed, ping = false) {
+  const salon = await salonConfigure(guild, cle, defaut);
+  if (!salon) return false;
+  const roles = ping ? rolesAlerte(guild) : [];
+  await salon.send({
+    content: roles.length ? roles.map(r => `<@&${r}>`).join(' ') : undefined,
+    embeds: [embed],
+    allowedMentions: { roles },
+  }).catch(() => {});
+  return true;
+}
+
+/** Logs généraux et alertes de sécurité (ping = mentionne les rôles d'alerte) */
+async function envoyerLog(guild, embed, ping = false) {
+  return envoyerDans(guild, 'logs_channel', config.LOG_CHANNEL_ID, embed, ping);
+}
+
+/** Toutes les sanctions (si aucun salon dédié, elles vont dans les logs généraux) */
+async function envoyerSanctionLog(guild, embed) {
+  const ok = await envoyerDans(guild, 'sanctions_channel', config.SANCTIONS_CHANNEL_ID, embed);
+  if (!ok) await envoyerLog(guild, embed);
+}
+
+/** Toutes les commandes exécutées, réussies ou non */
+async function envoyerLogCommande(guild, embed) {
+  return envoyerDans(guild, 'commands_channel', config.COMMANDS_CHANNEL_ID, embed);
 }
 
 /**
  * Applique une sanction (warn / mute / kick / ban), l'enregistre, prévient le joueur et logue.
  * Renvoie { ok, id, palier } ou { ok:false, erreur }.
  */
-async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dureeMs = null, auto = false }) {
+async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dureeMs = null, auto = false, robloxPseudo = null }) {
   const botMembre = guild.members.me;
   const membre = await guild.members.fetch(cibleId).catch(() => null);
   const modMembre = auto ? null : await guild.members.fetch(moderateur.id).catch(() => null);
@@ -108,6 +141,18 @@ async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dur
     if (modMembre && dureeMs > dureeMuteMax(modMembre)) {
       const max = dureeMuteMax(modMembre);
       return { ok: false, erreur: max ? `Ton grade te permet de mute **${formatDuree(max)} maximum**.` : "Ton grade ne te permet pas de mute." };
+    }
+  }
+
+  // Protection contre un compte staff piraté ou un abus : trop de sanctions lourdes en peu de temps
+  if (!auto && modMembre && type !== 'warn' && config.ABUS_STAFF.actif && niveau(modMembre) < 5) {
+    const n = await base.countSanctionsParModerateur(moderateur.id, Date.now() - config.ABUS_STAFF.fenetreMs);
+    if (n >= config.ABUS_STAFF.max) {
+      await envoyerLog(guild, new EmbedBuilder().setColor(COULEURS.alerte)
+        .setTitle('🚨 Limite de sanctions atteinte')
+        .setDescription(`${moderateur} a déjà donné **${n}** sanction(s) (mute / expulsion / ban) en ${Math.round(config.ABUS_STAFF.fenetreMs / 60000)} min. La nouvelle sanction a été **bloquée**. Abus ou compte piraté ?`)
+        .setTimestamp(), true);
+      return { ok: false, erreur: 'Trop de sanctions en peu de temps : par sécurité, un Fondateur doit intervenir.' };
     }
   }
 
@@ -148,7 +193,7 @@ async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dur
     )
     .setTimestamp();
   if (dureeMs) log.addFields({ name: 'Durée', value: formatDuree(dureeMs), inline: true });
-  await envoyerLog(guild, log);
+  await envoyerSanctionLog(guild, log);
 
   // Paliers automatiques sur les avertissements
   let palier = null;
@@ -164,11 +209,54 @@ async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dur
       if (sous.ok) palier = { action: p.action, id: sous.id };
     }
   }
+  // Ban sur le Discord principal -> ban en jeu (ER:LC)
+  let jeu = null;
+  if (type === 'ban') {
+    jeu = await synchroBanJeu(guild, { userId: cibleId, membre, user, pseudo: robloxPseudo, sanctionId: id });
+  }
+
   let propage = null;
   if (type === 'mute' || type === 'ban') {
     propage = await propager({ origine: guild, cibleId, user, type, dureeMs, raison, moderateur, id });
   }
-  return { ok: true, id, palier, propage };
+  return { ok: true, id, palier, propage, jeu };
+}
+
+/* ---------- Ban / unban en jeu (ER:LC) ---------- */
+function embedJeu(r, titre, userId, user, sanctionId) {
+  return new EmbedBuilder()
+    .setColor(r.etat === 'echec' ? COULEURS.warn : COULEURS.ban)
+    .setTitle(`🎮 ${titre} ${r.etat === 'envoye' ? 'envoyé' : r.etat === 'attente' ? 'mis en attente (serveur vide)' : 'impossible'}`)
+    .addFields(
+      { name: 'Joueur Discord', value: user ? `${user} (\`${userId}\`)` : `<@${userId}> (\`${userId}\`)`, inline: true },
+      { name: 'Compte Roblox', value: r.pseudo ?? 'introuvable', inline: true },
+      ...(sanctionId ? [{ name: 'Sanction', value: `#${sanctionId}`, inline: true }] : []),
+      ...(r.erreur ? [{ name: 'Détail', value: String(r.erreur).slice(0, 500) }] : []),
+    )
+    .setTimestamp();
+}
+
+async function synchroBanJeu(guild, { userId, membre, user, pseudo, sanctionId }) {
+  const r = await erlc.synchroniserBan(guild, { userId, membre, pseudo }).catch(err => ({ etat: 'echec', pseudo: null, erreur: err.message }));
+  if (!r) return null;
+  await envoyerSanctionLog(guild, embedJeu(r, 'Ban en jeu', userId, user, sanctionId));
+  return r;
+}
+
+async function synchroUnbanJeu(guild, { userId, pseudo = null }) {
+  const r = await erlc.synchroniserUnban(guild, { userId, membre: null, pseudo }).catch(err => ({ etat: 'echec', pseudo: null, erreur: err.message }));
+  if (!r) return null;
+  await envoyerSanctionLog(guild, embedJeu(r, 'Unban en jeu', userId, null, null));
+  return r;
+}
+
+/** Phrase à ajouter dans la réponse d'une commande (ban / unban) */
+function texteJeu(r, action = 'ban') {
+  if (!r) return '';
+  const mot = action === 'ban' ? 'Ban' : 'Unban';
+  if (r.etat === 'envoye') return `\n🎮 ${mot} en jeu envoyé pour **${r.pseudo}**.`;
+  if (r.etat === 'attente') return `\n🕒 Serveur ER:LC vide : ${mot.toLowerCase()} en jeu de **${r.pseudo}** mis en attente (appliqué dès qu'un joueur se connecte).`;
+  return `\n⚠️ ${mot} en jeu non effectué : ${r.erreur}`;
 }
 
 /** Répercute un mute / ban sur tous les autres serveurs où le bot est présent */
@@ -181,14 +269,17 @@ async function propager({ origine, cibleId, user, type, dureeMs, raison, moderat
     total++;
     try {
       if (type === 'ban') {
+        const principal = guild.id === config.ERLC.GUILD_ID;
+        const m = principal ? await guild.members.fetch(cibleId).catch(() => null) : null; // pseudo Bloxlink, avant le ban
         await guild.members.ban(cibleId, { reason: motif });
+        if (principal) await synchroBanJeu(guild, { userId: cibleId, membre: m, user, pseudo: null, sanctionId: id });
       } else {
         const m = await guild.members.fetch(cibleId).catch(() => null);
         if (!m || !m.moderatable) { total--; continue; } // pas membre de ce serveur : rien à faire
         await m.timeout(dureeMs, motif);
       }
       ok++;
-      await envoyerLog(guild, new EmbedBuilder().setColor(COULEURS[type])
+      await envoyerSanctionLog(guild, new EmbedBuilder().setColor(COULEURS[type])
         .setTitle(`${LABELS[type]} propagé depuis ${origine.name} (#${id})`)
         .addFields(
           { name: 'Joueur', value: `${user} (\`${user.id}\`)`, inline: true },
@@ -211,6 +302,7 @@ async function retirerPartout(origine, cibleId, type, motif) {
       if (type === 'ban') {
         await guild.members.unban(cibleId, motif);
         n++;
+        if (guild.id === config.ERLC.GUILD_ID) await synchroUnbanJeu(guild, { userId: cibleId });
       } else {
         const m = await guild.members.fetch(cibleId).catch(() => null);
         if (m && m.isCommunicationDisabled()) { await m.timeout(null, motif); n++; }
@@ -223,5 +315,6 @@ async function retirerPartout(origine, cibleId, type, motif) {
 module.exports = {
   EPH, LABELS, COULEURS,
   parseDuree, formatDuree, niveau, peut, dureeMuteMax, estExempte,
-  salonConfigure, envoyerLog, appliquerSanction, retirerPartout,
+  salonConfigure, envoyerLog, envoyerSanctionLog, envoyerLogCommande, rolesAlerte, appliquerSanction, retirerPartout,
+  synchroBanJeu, synchroUnbanJeu, texteJeu,
 };

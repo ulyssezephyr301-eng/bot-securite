@@ -36,4 +36,22 @@ async function avatarRoblox(id) {
   }
 }
 
-module.exports = { trouverCompteRoblox, avatarRoblox };
+// IDs Roblox -> pseudos (Map "id" -> "pseudo")
+async function nomsRoblox(ids) {
+  const uniques = [...new Set(ids.filter(Boolean).map(Number))].filter(n => Number.isFinite(n)).slice(0, 100);
+  if (!uniques.length) return new Map();
+  try {
+    const res = await fetch('https://users.roblox.com/v1/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userIds: uniques, excludeBannedUsers: false }),
+    });
+    if (!res.ok) return new Map();
+    const { data } = await res.json();
+    return new Map((data ?? []).map(u => [String(u.id), u.name]));
+  } catch {
+    return new Map();
+  }
+}
+
+module.exports = { trouverCompteRoblox, avatarRoblox, nomsRoblox };

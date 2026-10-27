@@ -5,6 +5,10 @@ const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js'
 const { initDatabase } = require('./database');
 const http = require('http');
 
+// Une erreur isolée ne doit pas arrêter le bot
+process.on('unhandledRejection', (err) => console.error('Promesse rejetée non gérée :', err));
+process.on('uncaughtException', (err) => console.error('Exception non gérée :', err));
+
 // Mini serveur web : Render exige un port ouvert, et un service de "ping" peut ainsi garder le bot éveillé
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -24,6 +28,7 @@ const client = new Client({
 
 client.commands = new Collection();
 client.buttons = new Collection();
+client.modals = new Collection();
 
 // Chargement des commandes
 for (const file of fs.readdirSync(path.join(__dirname, 'commands')).filter(f => f.endsWith('.js'))) {
@@ -32,6 +37,7 @@ for (const file of fs.readdirSync(path.join(__dirname, 'commands')).filter(f => 
     if (cmd.data) client.commands.set(cmd.data.name, cmd);
   }
   for (const [prefixe, fn] of Object.entries(mod.buttons ?? {})) client.buttons.set(prefixe, fn);
+  for (const [prefixe, fn] of Object.entries(mod.modals ?? {})) client.modals.set(prefixe, fn);
 }
 
 // Chargement des événements
