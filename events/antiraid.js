@@ -51,8 +51,8 @@ module.exports = {
       }
       await envoyerLog(membre.guild, new EmbedBuilder().setColor(COULEURS.alerte)
         .setTitle('🚨 RAID DÉTECTÉ')
-        .setDescription(`${liste.length} arrivées en moins de ${Math.round(cfg.fenetreMs / 1000)} s.\n${retires} compte(s) retiré(s). Les nouveaux arrivants seront sanctionnés pendant ${Math.round(cfg.dureeAlerteMs / 60000)} min.\nUtilise \`/lockdown serveur:true\` si besoin.`)
-        .setTimestamp());
+        .setDescription(`${liste.length} arrivées en moins de ${Math.round(cfg.fenetreMs / 1000)} s.\n${retires} compte(s) retiré(s). Les nouveaux arrivants seront sanctionnés pendant ${Math.round(cfg.dureeAlerteMs / 60000)} min.\nUtilise \`/lockdown serveur:True\` si besoin.`)
+        .setTimestamp(), true);
       return;
     }
 

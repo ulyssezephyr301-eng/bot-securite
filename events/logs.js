@@ -1,4 +1,4 @@
-const { Events, EmbedBuilder } = require('discord.js');
+const { Events, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { COULEURS, envoyerLog } = require('../utils');
 
 const coupe = (t, n = 1000) => (t && t.length > n ? t.slice(0, n) + '…' : t || '*vide*');
@@ -63,6 +63,18 @@ module.exports = {
         if (ajoutes.size) embed.addFields({ name: 'Ajoutés', value: ajoutes.map(r => `${r}`).join(' ') });
         if (retires.size) embed.addFields({ name: 'Retirés', value: retires.map(r => `${r}`).join(' ') });
         await envoyerLog(apres.guild, embed);
+
+        // Alerte : un rôle avec des permissions dangereuses vient d'être donné
+        const dangereux = ajoutes.filter(r => r.permissions.any([
+          PermissionFlagsBits.Administrator, PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageRoles,
+          PermissionFlagsBits.ManageChannels, PermissionFlagsBits.BanMembers,
+        ]));
+        if (dangereux.size) {
+          await envoyerLog(apres.guild, new EmbedBuilder().setColor(COULEURS.alerte)
+            .setTitle('🚨 Rôle à permissions dangereuses attribué')
+            .setDescription(`${apres.user} (\`${apres.id}\`) a reçu : ${dangereux.map(r => `${r}`).join(' ')}\nVérifie que c'est voulu (journal d'audit du serveur).`)
+            .setTimestamp(), true);
+        }
       },
     },
   ],

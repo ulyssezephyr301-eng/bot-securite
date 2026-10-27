@@ -1,6 +1,7 @@
 const { Events, EmbedBuilder } = require('discord.js');
 const base = require('../database');
-const { COULEURS, envoyerLog, retirerPartout } = require('../utils');
+const config = require('../config');
+const { COULEURS, envoyerSanctionLog, retirerPartout, synchroUnbanJeu } = require('../utils');
 
 // Débannit automatiquement les bans temporaires arrivés à échéance
 async function verifierExpirations(client) {
@@ -10,8 +11,9 @@ async function verifierExpirations(client) {
     if (!guild) continue;
     try { await guild.members.unban(b.user_id, 'Fin du bannissement temporaire'); } catch { /* déjà débanni */ }
     await retirerPartout(guild, b.user_id, 'ban', 'Fin du bannissement temporaire');
+    if (guild.id === config.ERLC.GUILD_ID) await synchroUnbanJeu(guild, { userId: b.user_id });
     await base.desactiverParId(b.id);
-    await envoyerLog(guild, new EmbedBuilder().setColor(COULEURS.unban)
+    await envoyerSanctionLog(guild, new EmbedBuilder().setColor(COULEURS.unban)
       .setTitle(`Fin du ban #${b.id}`)
       .setDescription(`<@${b.user_id}> a été débanni automatiquement.`).setTimestamp());
   }
