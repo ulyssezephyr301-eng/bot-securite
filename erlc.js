@@ -3,50 +3,94 @@ const config = require('./config');
 const base = require('./database');
 const { trouverCompteRoblox } = require('./roblox');
 
-const BASE = 'https://api.policeroleplay.community';
+// L'API a changé d'adresse : on essaie la nouvelle, puis l'ancienne si besoin
+const BASES = ['https://api.erlc.gg', 'https://api.policeroleplay.community'];
+let baseUtilisee = BASES[0];
 
 class ErlcError extends Error {
   constructor(message, { status = null, vide = false, details = null } = {}) {
     super(message);
     this.name = 'ErlcError';
     this.status = status;
-    this.vide = vide;       // le serveur ER:LC est vide : l'API refuse les commandes
+    this.vide = vide;       // le serveur ER:LC est vide ou hors ligne : l'API refuse les commandes
     this.details = details;
   }
 }
 
-const configure = () => Boolean(process.env.ERLC_API_KEY);
+// Retire les erreurs de copier-coller fréquentes : espaces, guillemets, « Bearer », « ERLC_API_KEY= »
+function nettoyerCle(brute) {
+  let c = String(brute ?? '').trim();
+  c = c.replace(/^["'`]+|["'`]+$/g, '').trim();
+  c = c.replace(/^ERLC_API_KEY\s*=\s*/i, '').replace(/^(bearer|server-key)\s*[:=]?\s*/i, '');
+  return c.replace(/^["'`]+|["'`]+$/g, '').trim();
+}
+
+const cleCourante = () => nettoyerCle(process.env.ERLC_API_KEY);
+const configure = () => Boolean(cleCourante());
 
 function interpreterErreur(status, data) {
+  const code = Number(data?.code);
   const brut = String(data?.message ?? data?.error ?? '').slice(0, 200);
-  if (/no players/i.test(brut)) {
-    return { texte: "Le serveur ER:LC est vide : l'API refuse d'envoyer des commandes quand personne n'est en jeu.", vide: true };
+  const ref = code ? ` (code ${code})` : status ? ` (HTTP ${status})` : '';
+
+  if (code === 3002 || /no players|server offline/i.test(brut)) {
+    return { texte: "Le serveur ER:LC est vide ou hors ligne : l'API refuse d'envoyer des commandes quand personne n'est en jeu.", vide: true };
   }
+  if (code === 2000) return { texte: `ER:LC ne reçoit aucune clé : la variable ERLC_API_KEY est vide ou mal nommée sur Render${ref}.` };
+  if (code === 2001) return { texte: `La clé API est mal formée : un espace, des guillemets ou un caractère en trop dans la variable ERLC_API_KEY sur Render${ref}.` };
+  if (code === 2002) return { texte: `ER:LC dit que cette clé est invalide ou expirée${ref}. Régénère-la dans les réglages API du serveur ER:LC, puis remplace ERLC_API_KEY sur Render.` };
+  if (code === 2003) return { texte: `ER:LC refuse la clé globale${ref}.` };
+  if (code === 2004) return { texte: `Cette clé API est bannie par ER:LC${ref}.` };
   if (status === 401 || status === 403) {
-    return { texte: 'La clé API ER:LC est refusée (vérifie la variable ERLC_API_KEY sur Render).' };
+    return { texte: `La clé API ER:LC est refusée${ref}. Fais /ig diagnostic pour voir le détail.` };
   }
   if (status === 429) {
     const s = Math.ceil(Number(data?.retry_after) || 5);
     return { texte: `Trop de requêtes vers l'API ER:LC : réessaie dans ${s} s.` };
   }
-  if (Number(data?.code) === 4000 || /\btrusted\b/i.test(brut)) {
+  if (code === 4000 || /\btrusted\b/i.test(brut)) {
     return { texte: "ER:LC refuse la commande : l'adresse IP du bot n'est pas reconnue comme source de confiance (voir les réglages API du serveur ER:LC)." };
   }
-  if (status >= 500) return { texte: "L'API ER:LC est indisponible pour le moment." };
-  return { texte: `L'API ER:LC a répondu par une erreur${status ? ` (${status})` : ''}${brut ? ` : ${brut}` : ''}.` };
+  if (status >= 500) return { texte: `L'API ER:LC est indisponible pour le moment${ref}.` };
+  return { texte: `L'API ER:LC a répondu par une erreur${ref}${brut ? ` : ${brut}` : ''}.` };
+}
+
+const AUTH_OU_INTROUVABLE = new Set([401, 403, 404]);
+
+// Appelle l'API : nouvelle adresse d'abord, ancienne en secours (réseau coupé, 404 ou clé refusée)
+async function appeler(chemin, options, cle) {
+  const ordre = [baseUtilisee, ...BASES.filter(b => b !== baseUtilisee)];
+  let premiere = null;
+  let reseau = null;
+  for (const [idx, base] of ordre.entries()) {
+    let res;
+    try {
+      res = await fetch(base + chemin, { ...options, headers: { 'server-key': cle, 'Content-Type': 'application/json', Accept: 'application/json' } });
+    } catch (err) {
+      reseau = err;
+      continue;
+    }
+    if (AUTH_OU_INTROUVABLE.has(res.status) && idx < ordre.length - 1) {
+      premiere = premiere ?? { res, base };
+      continue;
+    }
+    if (res.ok || !premiere) { baseUtilisee = base; return { res, base }; }
+    return premiere; // les deux adresses refusent : on garde la première réponse
+  }
+  if (premiere) return premiere;
+  throw reseau ?? new Error('réseau');
 }
 
 async function requete(chemin, { method = 'GET', body = null, timeoutMs = 10_000 } = {}) {
-  const cle = process.env.ERLC_API_KEY;
+  const cle = cleCourante();
   if (!cle) throw new ErlcError("La clé API ER:LC n'est pas configurée (variable ERLC_API_KEY sur Render).");
   let res;
   try {
-    res = await fetch(BASE + chemin, {
+    ({ res } = await appeler(chemin, {
       method,
-      headers: { 'server-key': cle, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
-    });
+    }, cle));
   } catch {
     throw new ErlcError("Impossible de joindre l'API ER:LC (délai dépassé ou réseau).");
   }
@@ -70,6 +114,22 @@ async function serveur({ players = false, staff = false, queue = false } = {}, {
   const data = await requete(chemin, { timeoutMs });
   cache.set(chemin, { t: Date.now(), data });
   return data;
+}
+
+/** Teste la liaison et explique le problème (sans jamais révéler la clé) */
+async function diagnostic() {
+  const brute = process.env.ERLC_API_KEY ?? '';
+  const propre = cleCourante();
+  const info = { cle: { presente: Boolean(propre), longueur: propre.length, nettoyee: Boolean(brute) && propre !== brute }, base: null, test: null };
+  if (!propre) return info;
+  try {
+    const d = await serveur({}, { ttlMs: 0 });
+    info.test = { ok: true, nom: d?.Name, joueurs: d?.CurrentPlayers, maxJoueurs: d?.MaxPlayers };
+  } catch (err) {
+    info.test = { ok: false, message: err.message, status: err.status ?? null, code: err.details?.code ?? null };
+  }
+  info.base = baseUtilisee;
+  return info;
 }
 
 function viderCache() {
@@ -209,7 +269,7 @@ const synchroniserBan = (guild, params) => synchroniser(guild, (n) => `:ban ${n}
 const synchroniserUnban = (guild, params) => synchroniser(guild, (n) => `:unban ${n}`, 'Unban en jeu de', params);
 
 module.exports = {
-  ErlcError, configure, serveur, viderCache, nombreJoueurs, parseJoueur,
+  ErlcError, configure, diagnostic, serveur, viderCache, nombreJoueurs, parseJoueur,
   envoyerCommande, executerOuAttendre, traiterAttente,
   validerJoueur, nettoyerMessage, normaliserCommande, commandeBloquee,
   synchroniserBan, synchroniserUnban,
