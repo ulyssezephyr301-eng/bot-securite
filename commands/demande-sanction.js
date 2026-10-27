@@ -1,4 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const {
+  SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle,
+} = require('discord.js');
 const config = require('../config');
 const base = require('../database');
 const { EPH, LABELS, COULEURS, peut, parseDuree, formatDuree, salonConfigure, appliquerSanction } = require('../utils');
@@ -6,6 +9,16 @@ const { EPH, LABELS, COULEURS, peut, parseDuree, formatDuree, salonConfigure, ap
 async function prevenir(client, userId, texte) {
   const u = await client.users.fetch(userId).catch(() => null);
   if (u) await u.send(texte).catch(() => {});
+}
+
+// Poste un message dans le fil de la demande (le fil a le même ID que le message d'origine) puis l'archive
+async function cloreFil(canal, d, texte) {
+  if (!d.message_id) return;
+  const fil = (await canal.threads?.fetch(d.message_id).catch(() => null))
+    ?? (await canal.guild.channels.fetch(d.message_id).catch(() => null));
+  if (!fil || !fil.isThread()) return;
+  await fil.send(texte).catch(() => {});
+  await fil.setArchived(true).catch(() => {});
 }
 
 async function traiter(i, accepter) {
@@ -22,14 +35,21 @@ async function traiter(i, accepter) {
   }
   const original = i.message.embeds[0];
 
+  // Refus : on demande d'abord une raison dans une fenêtre
   if (!accepter) {
-    if (!(await base.claimDemande(id, 'refused'))) return i.reply({ content: '⚠️ Déjà traitée.', ...EPH });
-    const embed = EmbedBuilder.from(original).setColor(COULEURS.kick)
-      .setTitle(`Demande #${id} — ❌ Refusée`)
-      .addFields({ name: 'Refusée par', value: `${i.user}` });
-    await i.update({ embeds: [embed], components: [] });
-    await prevenir(i.client, d.requester_id, `❌ Ta demande de sanction #${id} a été **refusée** par ${i.user.username}.`);
-    return;
+    const modal = new ModalBuilder()
+      .setCustomId(`dem_refus:${id}`)
+      .setTitle(`Refuser la demande #${id}`)
+      .addComponents(new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('raison')
+          .setLabel('Raison du refus')
+          .setStyle(TextInputStyle.Paragraph)
+          .setMinLength(3)
+          .setMaxLength(500)
+          .setRequired(true),
+      ));
+    return i.showModal(modal);
   }
 
   if (!(await base.claimDemande(id, 'accepted'))) return i.reply({ content: '⚠️ Déjà traitée.', ...EPH });
@@ -51,7 +71,44 @@ async function traiter(i, accepter) {
     .setTitle(`Demande #${id} — ✅ Acceptée`)
     .addFields({ name: 'Acceptée par', value: `${i.user}`, inline: true }, { name: 'Sanction', value: `#${res.id}`, inline: true });
   await i.editReply({ embeds: [embed], components: [] });
+  await cloreFil(i.channel, d, `✅ Demande **acceptée** par ${i.user} (sanction #${res.id}).`);
   await prevenir(i.client, d.requester_id, `✅ Ta demande de sanction #${id} a été **acceptée** par ${i.user.username} (sanction #${res.id}).`);
+}
+
+// Envoi de la fenêtre « raison du refus »
+async function refuser(i) {
+  if (!peut(i.member, 'valider')) {
+    return i.reply({ content: '❌ Tu ne peux pas valider les demandes.', ...EPH });
+  }
+  const id = Number(i.customId.split(':')[1]);
+  const d = await base.getDemande(id);
+  if (!d || d.status !== 'pending') {
+    return i.reply({ content: '⚠️ Cette demande a déjà été traitée.', ...EPH });
+  }
+  if (d.requester_id === i.user.id) {
+    return i.reply({ content: '❌ Tu ne peux pas traiter ta propre demande.', ...EPH });
+  }
+  const raison = i.fields.getTextInputValue('raison').trim();
+  if (!(await base.claimDemande(id, 'refused'))) {
+    return i.reply({ content: '⚠️ Déjà traitée.', ...EPH });
+  }
+
+  const original = i.message?.embeds?.[0];
+  const embed = (original ? EmbedBuilder.from(original) : new EmbedBuilder()).setColor(COULEURS.kick)
+    .setTitle(`Demande #${id} — ❌ Refusée`)
+    .addFields(
+      { name: 'Refusée par', value: `${i.user}`, inline: true },
+      { name: 'Raison du refus', value: raison.slice(0, 1000) },
+    );
+  if (i.isFromMessage()) {
+    await i.update({ embeds: [embed], components: [] });
+  } else {
+    await i.reply({ content: '✅ Demande refusée.', ...EPH });
+    const m = d.message_id ? await i.channel.messages.fetch(d.message_id).catch(() => null) : null;
+    if (m) await m.edit({ embeds: [embed], components: [] }).catch(() => {});
+  }
+  await cloreFil(i.channel, d, `❌ Demande **refusée** par ${i.user}.\n**Raison :** ${raison}`);
+  await prevenir(i.client, d.requester_id, `❌ Ta demande de sanction #${id} a été **refusée** par ${i.user.username}.\n**Raison :** ${raison}`);
 }
 
 module.exports = {
@@ -114,11 +171,30 @@ module.exports = {
     );
     const msg = await salon.send({ embeds: [embed], components: [row] });
     await base.setDemandeMessage(id, msg.id);
-    return i.reply({ content: `✅ Demande #${id} envoyée dans ${salon}.`, ...EPH });
+
+    // Un fil de discussion par demande
+    let fil = null;
+    try {
+      fil = await msg.startThread({
+        name: `Demande #${id} • ${user.username} • ${LABELS[type]}`.slice(0, 100),
+        autoArchiveDuration: 1440,
+      });
+      await fil.send({
+        content: `${i.user} Discussion de la demande #${id}. Un Administrateur ou plus peut l'accepter ✅ ou la refuser ❌ avec les boutons du message d'origine (une raison est demandée en cas de refus).`,
+        allowedMentions: { users: [i.user.id] },
+      });
+    } catch (err) {
+      console.error('Création du fil impossible (permission « Créer des fils publics » ?) :', err.message);
+    }
+    return i.reply({ content: `✅ Demande #${id} envoyée dans ${salon}${fil ? ` (fil : ${fil})` : ''}.`, ...EPH });
   },
 
   buttons: {
     dem_ok: (i) => traiter(i, true),
     dem_no: (i) => traiter(i, false),
+  },
+
+  modals: {
+    dem_refus: refuser,
   },
 };

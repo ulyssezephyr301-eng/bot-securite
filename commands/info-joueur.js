@@ -38,6 +38,7 @@ module.exports = {
 
     // Tout en haut : le compte Roblox
     if (roblox) {
+      base.setLienRoblox(user.id, String(roblox.id), roblox.nom).catch(() => {}); // sert au déban en jeu
       embed.setURL(`https://www.roblox.com/users/${roblox.id}/profile`);
       embed.addFields({
         name: '🎮 Compte Roblox',
