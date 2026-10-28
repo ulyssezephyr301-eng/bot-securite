@@ -36,6 +36,15 @@ function interpreterErreur(status, data) {
   if (code === 3002 || /no players|server offline/i.test(brut)) {
     return { texte: "Le serveur ER:LC est vide ou hors ligne : l'API refuse d'envoyer des commandes quand personne n'est en jeu.", vide: true };
   }
+  // 4000 : la clé est bonne, mais ER:LC n'autorise pas cette source à envoyer des commandes
+  if (code === 4000) {
+    return { texte: `ER:LC refuse les commandes envoyées par le bot${ref} : la clé est bonne, mais l'adresse IP du bot doit être ajoutée aux IP de confiance. Le propriétaire du serveur ER:LC le fait sur https://api.erlc.gg/server-owners (onglet « Settings » du serveur). Fais /ig diagnostic pour voir l'adresse IP du bot.` };
+  }
+  if (code === 4002) return { texte: `ER:LC interdit d'exécuter cette commande par l'API${ref}.` };
+  if (code === 4003) return { texte: `ER:LC refuse ce message : il contient un contenu interdit${ref}.` };
+  if (code === 9998) return { texte: `ER:LC interdit l'accès à cette ressource${ref}.` };
+  if (code === 9999) return { texte: `Le module du serveur ER:LC est obsolète${ref} : fais sortir tous les joueurs et relance le serveur ER:LC.` };
+  if (code === 1001) return { texte: `ER:LC n'arrive pas à joindre le serveur de jeu (Roblox)${ref}. Réessaie dans quelques minutes.` };
   if (code === 2000) return { texte: `ER:LC ne reçoit aucune clé : la variable ERLC_API_KEY est vide ou mal nommée sur Render${ref}.` };
   if (code === 2001) return { texte: `La clé API est mal formée : un espace, des guillemets ou un caractère en trop dans la variable ERLC_API_KEY sur Render${ref}.` };
   if (code === 2002) return { texte: `ER:LC dit que cette clé est invalide ou expirée${ref}. Régénère-la dans les réglages API du serveur ER:LC, puis remplace ERLC_API_KEY sur Render.` };
@@ -48,8 +57,8 @@ function interpreterErreur(status, data) {
     const s = Math.ceil(Number(data?.retry_after) || 5);
     return { texte: `Trop de requêtes vers l'API ER:LC : réessaie dans ${s} s.` };
   }
-  if (code === 4000 || /\btrusted\b/i.test(brut)) {
-    return { texte: "ER:LC refuse la commande : l'adresse IP du bot n'est pas reconnue comme source de confiance (voir les réglages API du serveur ER:LC)." };
+  if (/\btrusted\b/i.test(brut)) {
+    return { texte: "ER:LC refuse la commande : l'adresse IP du bot n'est pas reconnue comme source de confiance (tableau de bord API du serveur ER:LC)." };
   }
   if (status >= 500) return { texte: `L'API ER:LC est indisponible pour le moment${ref}.` };
   return { texte: `L'API ER:LC a répondu par une erreur${ref}${brut ? ` : ${brut}` : ''}.` };
@@ -116,6 +125,17 @@ async function serveur({ players = false, staff = false, queue = false } = {}, {
   return data;
 }
 
+// Adresse IP que voit internet quand le bot appelle ER:LC (utile pour la liste des IP de confiance)
+async function ipPublique() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(4000) });
+    const d = await res.json();
+    return d?.ip ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Teste la liaison et explique le problème (sans jamais révéler la clé) */
 async function diagnostic() {
   const brute = process.env.ERLC_API_KEY ?? '';
@@ -129,6 +149,8 @@ async function diagnostic() {
     info.test = { ok: false, message: err.message, status: err.status ?? null, code: err.details?.code ?? null };
   }
   info.base = baseUtilisee;
+  info.ip = await ipPublique();
+  info.commandes = { ...etatCommandes };
   return info;
 }
 
@@ -149,6 +171,7 @@ function parseJoueur(p) {
 
 /* ---------- Commandes (une toutes les ~5 s, en file d'attente) ---------- */
 let derniereCommande = 0;
+const etatCommandes = { ok: null, code: null, message: null, t: null }; // dernier résultat d'une commande envoyée
 let chaine = Promise.resolve();
 
 function envoyerCommande(commande) {
@@ -156,7 +179,12 @@ function envoyerCommande(commande) {
     const attente = Math.max(0, derniereCommande + config.ERLC.intervalleCommandesMs - Date.now());
     if (attente) await new Promise(r => setTimeout(r, attente));
     try {
-      return await requete('/v2/server/command', { method: 'POST', body: { command: commande } });
+      const res = await requete('/v2/server/command', { method: 'POST', body: { command: commande } });
+      Object.assign(etatCommandes, { ok: true, code: null, message: null, t: Date.now() });
+      return res;
+    } catch (err) {
+      Object.assign(etatCommandes, { ok: false, code: err.details?.code ?? err.status ?? null, message: err.message, t: Date.now() });
+      throw err;
     } finally {
       derniereCommande = Date.now();
     }
