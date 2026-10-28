@@ -1,10 +1,22 @@
-const { SlashCommandBuilder } = require('discord.js');
-const { EPH, peut } = require('../utils');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { EPH, COULEURS, peut, envoyerLog } = require('../utils');
 
 // Accepte un ID ou un lien de message Discord
 function extraireId(txt) {
   const m = /(\d{17,20})\s*$/.exec(String(txt).trim());
   return m ? m[1] : null;
+}
+
+// Journal : qui a supprimé combien de messages, et où
+async function journalClear(i, salon, nombre, detail) {
+  await envoyerLog(i.guild, new EmbedBuilder().setColor(COULEURS.warn)
+    .setTitle('🧹 Messages supprimés')
+    .addFields(
+      { name: 'Modérateur', value: `${i.user} (\`${i.user.id}\`)`, inline: true },
+      { name: 'Salon', value: `${salon}`, inline: true },
+      { name: 'Supprimés', value: String(nombre), inline: true },
+      { name: 'Détail', value: String(detail).slice(0, 900) },
+    ).setTimestamp());
 }
 
 module.exports = {
@@ -26,6 +38,7 @@ module.exports = {
     try {
       if (i.options.getSubcommand() === 'nombre') {
         const supprimes = await salon.bulkDelete(i.options.getInteger('nombre'), true);
+        await journalClear(i, salon, supprimes.size, `les ${i.options.getInteger('nombre')} derniers messages demandés`);
         return i.editReply(`🧹 ${supprimes.size} message(s) supprimé(s). (Les messages de plus de 14 jours ne peuvent pas être supprimés en masse.)`);
       }
 
@@ -56,6 +69,7 @@ module.exports = {
         const supprimes = await salon.bulkDelete(collectes.slice(k, k + 100), true);
         total += supprimes.size;
       }
+      await journalClear(i, salon, total, `de ${premier.url} à ${dernier.url} (${collectes.length} message(s) trouvé(s))`);
       return i.editReply(`🧹 ${total} message(s) supprimé(s) sur ${collectes.length} trouvé(s). (Les messages de plus de 14 jours sont ignorés.)`);
     } catch (err) {
       console.error('Erreur /clear :', err);

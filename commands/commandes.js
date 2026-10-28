@@ -3,7 +3,7 @@ const config = require('../config');
 const { EPH, niveau, formatDuree } = require('../utils');
 
 const GRADES = { 1: 'Guide', 2: 'Modérateur', 3: 'Administrateur', 4: 'Exécutif', 5: 'Fondateur' };
-const DEFAUTS_IG = { ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5 };
+const DEFAUTS_IG = { ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5, igDiagnostic: 5 };
 
 const nomGrade = (n) => (n ? (n >= 5 ? GRADES[5] : `${GRADES[n]} et +`) : null);
 const grade = (action) => nomGrade(config.NIVEAU_MIN[action] ?? DEFAUTS_IG[action]);
@@ -56,7 +56,7 @@ const GROUPES_IG = [
   {
     titre: '⚙️ Avancé (Fondateur)',
     cmds: {
-      diagnostic: ['igCommande', "Teste la liaison avec ER:LC (clé API, serveur) et explique le problème trouvé, par exemple une clé refusée ou un serveur vide."],
+      diagnostic: ['igDiagnostic', "Teste la liaison avec ER:LC (clé API, serveur) et explique le problème trouvé, par exemple une clé refusée ou un serveur vide."],
       commande: ['igCommande', "Exécute n'importe quelle commande ER:LC, par exemple :time 12. Les commandes qui donnent des grades en jeu, ban, kick et shutdown sont bloquées."],
     },
   },
@@ -185,7 +185,7 @@ module.exports = {
       return i.reply({ content: '❌ Cette commande est réservée au staff.', ...EPH });
     }
     const publier = i.options.getBoolean('publier') ?? false;
-    if (publier && niveau(i.member) < (config.NIVEAU_MIN.config ?? 3)) {
+    if (publier && niveau(i.member) < (config.NIVEAU_MIN.publierCommandes ?? 3)) {
       return i.reply({ content: '❌ Seuls les Administrateurs et plus peuvent publier la liste dans le salon.', ...EPH });
     }
 

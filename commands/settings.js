@@ -33,13 +33,13 @@ module.exports = {
     if (SALONS[sub]) {
       const salon = i.options.getChannel('salon');
       await base.setSetting(i.guild.id, SALONS[sub][0], salon.id);
-      return i.reply({ content: `✅ Salon ${SALONS[sub][1]} : ${salon}`, ...EPH });
+      return i.reply({ content: `✅ Salon ${SALONS[sub][1]} : ${salon}` });
     }
 
     if (sub === 'antiraid') {
       const actif = i.options.getBoolean('actif');
       await base.setSetting(i.guild.id, 'antiraid', actif ? 'on' : 'off');
-      return i.reply({ content: `🛡️ Anti-raid ${actif ? 'activé' : 'désactivé'}.`, ...EPH });
+      return i.reply({ content: `🛡️ Anti-raid ${actif ? 'activé' : 'désactivé'}.` });
     }
 
     const valeurs = {};

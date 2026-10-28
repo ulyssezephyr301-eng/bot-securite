@@ -33,7 +33,7 @@ async function noter(i) {
     guildId: i.guild.id, userId: user.id, authorId: i.user.id,
     content: i.options.getString('texte').slice(0, 1000),
   });
-  return i.reply({ content: `📝 Note #${id} ajoutée sur ${user}. Elle apparaît dans \`/sanction voir\`.`, ...EPH });
+  return i.reply({ content: `📝 Note #${id} ajoutée sur ${user}. Elle apparaît dans \`/sanction voir\`.` });
 }
 
 /* ---------- Levées ---------- */
@@ -76,7 +76,7 @@ async function unban(i) {
 
 /* ---------- Mutes en cours ---------- */
 async function muteActif(i) {
-  await i.deferReply(EPH);
+  await i.deferReply();
   const lignes = await base.getMutesActifs(Date.now());
   const actifs = [];
   for (const m of lignes) {
@@ -199,7 +199,7 @@ const commands = [
       if (!peut(i.member, 'voirSanctions')) return refuse(i);
       if (i.options.getSubcommand() === 'mute-actif') return muteActif(i);
       const user = i.options.getUser('membre');
-      return i.reply({ ...(await rendrePage(i.guild, user.id, 0)), ...EPH });
+      return i.reply(await rendrePage(i.guild, user.id, 0));
     },
   },
 

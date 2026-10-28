@@ -5,11 +5,11 @@ const { nomsRoblox } = require('../roblox');
 const { EPH, COULEURS, niveau, envoyerLog, envoyerSanctionLog } = require('../utils');
 
 // Niveau minimum par action (config.js > NIVEAU_MIN), avec une valeur par défaut si la ligne manque
-const DEFAUTS = { ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5 };
+const DEFAUTS = { ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5, igDiagnostic: 5 };
 const ACTION_DE = {
   serveur: 'ig', joueurs: 'ig', staff: 'ig', file: 'ig',
   h: 'igMessage', m: 'igMessage', pm: 'igMessage',
-  kick: 'igKick', ban: 'igBan', unban: 'igUnban', commande: 'igCommande', diagnostic: 'igCommande',
+  kick: 'igKick', ban: 'igBan', unban: 'igUnban', commande: 'igCommande', diagnostic: 'igDiagnostic',
 };
 const niveauRequis = (action) => config.NIVEAU_MIN[action] ?? DEFAUTS[action];
 
@@ -230,6 +230,20 @@ async function diagnostic(i) {
           : `❌ ${d.test.message}`,
       },
     );
+
+    // Commandes : elles demandent une autorisation en plus de la clé (IP de confiance)
+    const c = d.commandes;
+    const quand = c.t ? ` (<t:${Math.floor(c.t / 1000)}:R>)` : '';
+    let etat = "Aucune commande envoyée depuis le démarrage du bot. Fais par exemple `/ig m` pour tester.";
+    if (c.ok === true) etat = `✅ La dernière commande a été acceptée${quand}.`;
+    if (c.ok === false) etat = `❌ Dernière commande refusée${quand} : ${c.message}`;
+    embed.addFields({ name: 'Envoi de commandes', value: String(etat).slice(0, 1000) });
+    embed.addFields({
+      name: 'Adresse IP du bot',
+      value: d.ip
+        ? `\`${d.ip}\`\nSi les commandes sont refusées (code 4000), le **propriétaire** du serveur ER:LC doit ajouter cette adresse sur https://api.erlc.gg/server-owners (onglet « Settings » du serveur, liste des IP de confiance). Sur Render, l'adresse peut changer : elle vient d'une plage partagée.`
+        : "Impossible de la déterminer pour le moment.",
+    });
   }
   return i.editReply({ embeds: [embed] });
 }
@@ -273,7 +287,8 @@ module.exports = {
       return i.reply({ content: "❌ L'API ER:LC n'est pas configurée (variable ERLC_API_KEY manquante sur Render). Fais /ig diagnostic.", ...EPH });
     }
 
-    await i.deferReply(EPH);
+    // Réponses visibles par tout le salon, sauf le diagnostic (adresse IP, état de la clé)
+    await i.deferReply(sub === 'diagnostic' ? EPH : undefined);
     try {
       switch (sub) {
         case 'serveur': return await infosServeur(i);

@@ -72,7 +72,6 @@ module.exports = {
       invalider(guildId);
       return i.reply({
         content: `✅ ${spoiler(mot)} ajouté (${gravite === 'grave' ? 'grave : suppression + mute' : 'insulte : suppression + avertissement'}).\n*Il est détecté même avec des accents, des majuscules ou des lettres répétées.*`,
-        ...EPH,
       });
     }
 
@@ -84,6 +83,6 @@ module.exports = {
     if (f.baseInterdits.has(mot) || f.baseGraves.has(mot)) await base.setMot(guildId, mot, 'autorise'); // mot de base : on l'exclut
     else await base.deleteMot(guildId, mot);                                                             // mot ajouté : on le supprime
     invalider(guildId);
-    return i.reply({ content: `✅ ${spoiler(mot)} retiré de la liste.`, ...EPH });
+    return i.reply({ content: `✅ ${spoiler(mot)} retiré de la liste.` });
   },
 };

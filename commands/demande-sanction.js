@@ -186,7 +186,7 @@ module.exports = {
     } catch (err) {
       console.error('Création du fil impossible (permission « Créer des fils publics » ?) :', err.message);
     }
-    return i.reply({ content: `✅ Demande #${id} envoyée dans ${salon}${fil ? ` (fil : ${fil})` : ''}.`, ...EPH });
+    return i.reply({ content: `✅ Demande #${id} envoyée dans ${salon}${fil ? ` (fil : ${fil})` : ''}.` });
   },
 
   buttons: {
