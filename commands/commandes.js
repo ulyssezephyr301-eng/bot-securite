@@ -3,12 +3,16 @@ const config = require('../config');
 const { EPH, niveau, formatDuree } = require('../utils');
 
 const GRADES = { 1: 'Guide', 2: 'Modérateur', 3: 'Administrateur', 4: 'Exécutif', 5: 'Fondateur' };
-const DEFAUTS_IG = { ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5, igDiagnostic: 5 };
 
+// Niveau minimum par défaut si une ligne manque dans config.js > NIVEAU_MIN
+const DEFAUTS = {
+  ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5, igDiagnostic: 5,
+  mots: 3, publierCommandes: 3, reseau: 5, aide: 1,
+};
+const niveauAction = (action) => config.NIVEAU_MIN[action] ?? DEFAUTS[action];
 const nomGrade = (n) => (n ? (n >= 5 ? GRADES[5] : `${GRADES[n]} et +`) : null);
-const grade = (action) => nomGrade(config.NIVEAU_MIN[action] ?? DEFAUTS_IG[action]);
-
-const NIVEAU_AIDE = () => config.NIVEAU_MIN.aide ?? 1;
+const grade = (action) => nomGrade(niveauAction(action));
+const NIVEAU_AIDE = () => niveauAction('aide');
 
 // Catégories de modération : [commande, action (ou table sous-commande -> action), sous-commandes à afficher]
 const CATEGORIES = [
@@ -22,7 +26,7 @@ const CATEGORIES = [
   { titre: '📨 Demandes de sanction', cmds: [['demande-sanction', 'demande']] },
   { titre: '📋 Suivi des joueurs', cmds: [['sanction', { voir: 'voirSanctions', 'mute-actif': 'voirSanctions' }], ['info-joueur', 'infoJoueur']] },
   { titre: '🧹 Gestion des salons', cmds: [['clear', 'clear'], ['lockdown', 'lockdown'], ['unlock', 'lockdown'], ['slowmode', 'lockdown']] },
-  { titre: '⚙️ Configuration', cmds: [['config', 'config'], ['mots', 'mots']] },
+  { titre: '⚙️ Configuration et réseau', cmds: [['config', 'config'], ['mots', 'mots'], ['reseau', 'reseau']] },
   { titre: '📖 Aide', cmds: [['commandes', 'aide']] },
 ];
 
@@ -48,18 +52,48 @@ const GROUPES_IG = [
   {
     titre: '🔨 Sanctions en jeu',
     cmds: {
-      kick: ['igKick', "Expulse un joueur du serveur ER:LC (:kick). Il peut revenir tout de suite. Sans effet sur Discord."],
-      ban: ['igBan', "Bannit un joueur du serveur ER:LC (:ban) par son pseudo Roblox, en jeu seulement. Pour bannir aussi sur Discord, utilise /sanction-ban."],
+      kick: ['igKick', 'Expulse un joueur du serveur ER:LC (:kick). Il peut revenir tout de suite. Sans effet sur Discord.'],
+      ban: ['igBan', 'Bannit un joueur du serveur ER:LC (:ban) par son pseudo Roblox, en jeu seulement. Pour bannir aussi sur Discord, utilise /sanction-ban.'],
       unban: ['igUnban', 'Débannit un joueur du serveur ER:LC (:unban) par son pseudo Roblox ou son ID.'],
     },
   },
   {
-    titre: '⚙️ Avancé (Fondateur)',
+    titre: '⚙️ Avancé',
     cmds: {
-      diagnostic: ['igDiagnostic', "Teste la liaison avec ER:LC (clé API, serveur) et explique le problème trouvé, par exemple une clé refusée ou un serveur vide."],
+      diagnostic: ['igDiagnostic', 'Teste la liaison avec ER:LC (clé API, serveur, envoi de commandes) et explique le problème trouvé.'],
       commande: ['igCommande', "Exécute n'importe quelle commande ER:LC, par exemple :time 12. Les commandes qui donnent des grades en jeu, ban, kick et shutdown sont bloquées."],
     },
   },
+];
+
+// Résumé par grade : [action, libellé]
+const CAPACITES = [
+  ['aide', '/commandes'],
+  ['note', '/sanction-note'],
+  ['warn', '/sanction-warn'],
+  ['demande', '/demande-sanction'],
+  ['voirSanctions', '/sanction voir et mute-actif'],
+  ['infoJoueur', '/info-joueur'],
+  ['clear', '/clear'],
+  ['lockdown', '/lockdown, /unlock, /slowmode'],
+  ['ig', '/ig serveur, joueurs, staff, file'],
+  ['igMessage', '/ig h, m, pm'],
+  ['mute', '/sanction-mute'],
+  ['unmute', '/sanction-unmute'],
+  ['igKick', '/ig kick'],
+  ['kick', '/sanction-expulser'],
+  ['ban', '/sanction-ban'],
+  ['unban', '/sanction-unban'],
+  ['igBan', '/ig ban'],
+  ['igUnban', '/ig unban'],
+  ['valider', 'accepter ou refuser les demandes'],
+  ['delsanction', 'supprimer une sanction (🗑️)'],
+  ['mots', '/mots'],
+  ['publierCommandes', '/commandes publier'],
+  ['config', '/config (tout)'],
+  ['igCommande', '/ig commande'],
+  ['igDiagnostic', '/ig diagnostic'],
+  ['reseau', '/reseau synchroniser'],
 ];
 
 /* ---------- Commandes cliquables ---------- */
@@ -90,11 +124,7 @@ function lignes(client, ids, nom, action, subsFiltre = null) {
   const cmd = client.commands.get(nom);
   if (!cmd) return [];
   const json = cmd.data.toJSON();
-  const gradeDe = (act) => {
-    if (act === 'aide') return nomGrade(NIVEAU_AIDE());
-    return act ? grade(act) : null;
-  };
-  const suffixe = (act) => { const g = gradeDe(act); return g ? ` — **${g}**` : ''; };
+  const suffixe = (act) => { const g = act ? grade(act) : null; return g ? ` — **${g}**` : ''; };
 
   const toutesSubs = (json.options ?? []).filter(o => o.type === 1);
   if (toutesSubs.length) {
@@ -113,7 +143,7 @@ function embedModeration(client, ids) {
   const embed = new EmbedBuilder()
     .setColor(0x3498db)
     .setTitle('🛡️ Commandes de modération')
-    .setDescription('Le grade indiqué après chaque commande est le **minimum requis**. Les commandes en jeu (ER:LC) sont dans le message suivant.');
+    .setDescription('Le grade indiqué après chaque commande est le **minimum requis**. Les commandes en jeu (ER:LC) sont dans le message suivant, le résumé par grade et les règles dans le dernier.');
 
   const connues = new Set(['ig']);
   for (const cat of CATEGORIES) {
@@ -124,22 +154,6 @@ function embedModeration(client, ids) {
   // Commandes ajoutées plus tard et pas encore classées
   const autres = [...client.commands.keys()].filter(n => !connues.has(n)).flatMap(n => lignes(client, ids, n, null));
   if (autres.length) embed.addFields({ name: '➕ Autres', value: autres.join('\n').slice(0, 1024) });
-
-  const mutes = [1, 2, 3, 4, 5].map(n => {
-    const max = Math.min(config.MUTE_MAX_PAR_NIVEAU[n] ?? 0, config.MUTE_MAX_MS);
-    return `${GRADES[n]} : ${max ? formatDuree(max) : 'aucun mute'}`;
-  }).join(' • ');
-  embed.addFields(
-    { name: '⏱️ Durée maximale des mutes', value: `${mutes}\n*(Discord limite les mutes à 28 jours.)*` },
-    {
-      name: '🌐 À savoir',
-      value:
-        '• Les mutes et les bans sont répercutés sur tous les serveurs du réseau.\n' +
-        "• 3 avertissements = mute automatique d'1 h, 5 avertissements = expulsion.\n" +
-        "• L'anti-raid, l'anti-spam et l'anti-nuke surveillent le serveur en permanence.\n" +
-        "• Chaque sanction est enregistrée dans l'historique du joueur et dans les logs.",
-    },
-  );
   return embed;
 }
 
@@ -167,16 +181,57 @@ function embedJeu(ids) {
       '• Pour `/ig pm`, `kick`, `ban` et `unban`, le bot propose les joueurs connectés quand tu tapes un pseudo.\n' +
       '• Un `/sanction-ban` sur le Discord principal bannit aussi le joueur **en jeu** (pseudo Roblox lu depuis son pseudo Bloxlink, ou option `roblox`). `/sanction-unban` le débannit en jeu.\n' +
       "• Si le serveur ER:LC est vide, l'API refuse les commandes : le ban ou le déban est mis en attente et appliqué dès qu'un joueur se connecte.\n" +
-      "• Les commandes sont envoyées au maximum une toutes les 5 secondes environ, les suivantes patientent.\n" +
+      '• Les commandes sont envoyées au maximum une toutes les 5 secondes environ, les suivantes patientent.\n' +
       '• Les kick et ban en jeu sont limités par membre du staff (sécurité), et tout est enregistré dans les salons de logs.',
   });
+  return embed;
+}
+
+/* ---------- Message 3 : grades et règles ---------- */
+function embedGrades() {
+  const embed = new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle('🏅 Grades, règles et automatismes')
+    .setDescription('Chaque grade a **tout ce qui précède** (un Administrateur a aussi les commandes du Guide et du Modérateur). Ci-dessous : ce que chaque grade **ajoute**.');
+
+  for (let n = 1; n <= 5; n++) {
+    const items = CAPACITES.filter(([action]) => niveauAction(action) === n).map(([, libelle]) => libelle);
+    const max = Math.min(config.MUTE_MAX_PAR_NIVEAU[n] ?? 0, config.MUTE_MAX_MS);
+    const mute = max ? `\n⏱️ Mute : ${formatDuree(max)} maximum${n >= 4 ? ' (limite de Discord : 28 jours)' : ''}` : '';
+    embed.addFields({
+      name: n === 1 ? `🔹 ${GRADES[n]}` : `🔹 ${GRADES[n]} (en plus)`,
+      value: ((items.length ? items.join(' • ') : '—') + mute).slice(0, 1024),
+    });
+  }
+
+  embed.addFields(
+    {
+      name: '👁️ Visibilité des réponses',
+      value:
+        'Les réponses des commandes sont **visibles par tout le salon**. Elles restent **privées** pour `/commandes`, `/clear`, `/config voir`, `/mots liste`, `/ig diagnostic`, ainsi que pour les refus et les erreurs. ' +
+        'Toutes les commandes (réussies ou non) sont enregistrées dans le salon des commandes.',
+    },
+    {
+      name: '🌐 Réseau de serveurs',
+      value:
+        '• Les mutes et les bans sont répercutés sur **tous** les serveurs du bot.\n' +
+        '• Quelqu\'un qui rejoint un autre serveur sans être sur le **serveur principal** est expulsé et reçoit un MP lui demandant de rejoindre d\'abord le principal.\n' +
+        '• Quand le bot rejoint un nouveau serveur, tous les bans du réseau y sont appliqués ; ses bans existants sont importés si le bot a été ajouté par un Exécutif ou un Fondateur.',
+    },
+    {
+      name: '🛡️ Protections automatiques',
+      value:
+        'Anti-raid, anti-spam, filtre de mots (insultes : avertissement, propos graves : mute), anti-nuke, bots ajoutés sans autorisation expulsés, limite de sanctions par membre du staff, ' +
+        'paliers d\'avertissements (3 = mute d\'1 h, 5 = expulsion) et fin automatique des bans temporaires.',
+    },
+  );
   return embed;
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('commandes')
-    .setDescription('Affiche toutes les commandes du bot (modération et en jeu) avec le grade requis')
+    .setDescription('Affiche toutes les commandes du bot (modération et en jeu), les grades et les règles')
     .setDMPermission(false)
     .addBooleanOption(o => o.setName('publier').setDescription('Poster la liste dans le salon (Administrateur et +)').setRequired(false)),
 
@@ -185,14 +240,15 @@ module.exports = {
       return i.reply({ content: '❌ Cette commande est réservée au staff.', ...EPH });
     }
     const publier = i.options.getBoolean('publier') ?? false;
-    if (publier && niveau(i.member) < (config.NIVEAU_MIN.publierCommandes ?? 3)) {
+    if (publier && niveau(i.member) < niveauAction('publierCommandes')) {
       return i.reply({ content: '❌ Seuls les Administrateurs et plus peuvent publier la liste dans le salon.', ...EPH });
     }
 
     const ids = await idsCommandes(i.client);
     const options = publier ? {} : EPH;
-    // Deux messages : Discord limite à 6000 caractères par message
+    // Trois messages : Discord limite à 6000 caractères par message
     await i.reply({ embeds: [embedModeration(i.client, ids)], ...options });
     await i.followUp({ embeds: [embedJeu(ids)], ...options });
+    await i.followUp({ embeds: [embedGrades()], ...options });
   },
 };
