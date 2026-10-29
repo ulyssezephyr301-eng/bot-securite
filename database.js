@@ -138,6 +138,17 @@ async function countSanctionsParModerateur(moderatorId, depuis) {
   return Number(r.rows[0].n);
 }
 
+// Bans en cours dans le réseau (un par joueur, avec le dernier motif)
+async function getBansActifs(now) {
+  const r = await db.execute({
+    sql: `SELECT user_id, MAX(id) AS id, reason FROM sanctions
+          WHERE type = 'ban' AND active = 1 AND (expires_at IS NULL OR expires_at > ?)
+          GROUP BY user_id`,
+    args: [now],
+  });
+  return r.rows;
+}
+
 async function bansExpires(now) {
   const r = await db.execute({
     sql: `SELECT * FROM sanctions WHERE type = 'ban' AND active = 1 AND expires_at IS NOT NULL AND expires_at <= ?`,
@@ -267,7 +278,7 @@ async function setSetting(guildId, key, value) {
 module.exports = {
   db, initDatabase,
   addSanction, getSanctions, countSanctions, getSanction, deleteSanction,
-  desactiverSanctions, desactiverParId, bansExpires, getMutesActifs, countSanctionsParModerateur,
+  desactiverSanctions, desactiverParId, bansExpires, getBansActifs, getMutesActifs, countSanctionsParModerateur,
   addDemande, getDemande, setDemandeMessage, claimDemande, resetDemande,
   addNote, getNotes, countNotes,
   getMots, setMot, deleteMot,

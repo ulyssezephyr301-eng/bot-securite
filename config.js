@@ -32,7 +32,8 @@ module.exports = {
     clear: 1,
     infoJoueur: 1,
     lockdown: 1,
-    config: 3,
+    config: 4,        // /config (toutes les sous-commandes) : Exécutif et Fondateur
+    publierCommandes: 3, // /commandes publier:True
     mots: 3,          // /mots : ajouter / retirer des mots interdits
     ig: 1,            // /ig serveur, joueurs, staff, file
     igMessage: 1,     // /ig h, m, pm
@@ -40,6 +41,8 @@ module.exports = {
     igBan: 3,         // /ig ban
     igUnban: 3,       // /ig unban
     igCommande: 5,    // /ig commande (commande ER:LC libre)
+    igDiagnostic: 5,  // /ig diagnostic
+    reseau: 5,        // /reseau synchroniser
   },
 
   // Durée maximale de mute selon le niveau (Discord limite de toute façon les timeouts à 28 jours)
@@ -128,6 +131,14 @@ module.exports = {
       intervalleMs: 30_000,           // le statut du bot alterne toutes les 30 secondes
       fondateursARetirer: 2,          // retiré du nombre de personnes surveillées (les 2 fondateurs)
     },
+  },
+
+  // Réseau de serveurs : tous les serveurs où le bot est présent, avec un serveur principal (ERLC.GUILD_ID)
+  RESEAU: {
+    serveursLibres: [],  // IDs de serveurs où l'on peut entrer sans être membre du serveur principal
+    lienPrincipal: '',   // lien d'invitation du serveur principal envoyé en MP (vide = le bot en crée un)
+    importerBans: true,  // quand le bot rejoint un serveur : importer aussi ses bans (seulement si le bot a été ajouté par un Exécutif ou un Fondateur)
+    pauseMs: 400,        // pause entre deux bans, pour respecter les limites de Discord
   },
 
   ANTINUKE: {

@@ -57,3 +57,24 @@ Le bot a besoin des permissions « Créer des fils publics » et « Envoyer des 
 - `/ig serveur|joueurs|staff|file` (infos), `/ig h|m|pm` (messages), `/ig kick|ban|unban` (sanctions), `/ig commande` (Fondateur).
 - Un `/sanction-ban` sur le Discord principal bannit aussi en jeu ; `/sanction-unban` débannit en jeu. Serveur ER:LC vide : mis en attente.
 - Le statut du bot alterne entre « N joueurs In Game » et « Surveille N personnes » (réglages dans `config.js` > `ERLC`).
+
+## Dépannage ER:LC
+`/ig diagnostic` (Fondateur) teste la clé et le serveur et explique le problème (clé absente, mal formée, expirée, serveur vide...).
+L'API utilise `https://api.erlc.gg` (l'ancienne adresse sert de secours). Codes d'erreur ER:LC : 2000 clé absente, 2001 clé mal formée, 2002 clé invalide ou expirée, 3002 serveur vide ou hors ligne.
+
+## Droits et visibilité
+- `/config` (toutes les sous-commandes) : Exécutif et Fondateur. `/ig diagnostic` et `/reseau` : Fondateur seulement.
+- Les réponses des commandes sont visibles par tout le salon, sauf `/commandes`, `/clear`, `/config voir`, `/mots liste` et `/ig diagnostic` (privées).
+- Toutes les commandes (réussies ou non) sont journalisées dans le salon `/config commandes`. `/clear` journalise aussi qui a supprimé combien de messages.
+
+## Commandes ER:LC refusées (code 4000)
+Selon la doc officielle d'ER:LC, seules les adresses IP « de confiance » peuvent envoyer des commandes. Le propriétaire du serveur privé ajoute l'adresse du bot
+sur https://api.erlc.gg/server-owners : onglet « Settings » du serveur, une adresse IP + un commentaire. `/ig diagnostic` affiche l'adresse du bot.
+Render sort d'une plage d'adresses partagée (« any IP within its ranges ») : si l'adresse change, il faut un hébergeur à adresse fixe (machine gratuite Oracle, VPS, ou IP dédiée Render payante).
+
+## Réseau de serveurs
+- Serveur principal = `ERLC.GUILD_ID` dans `config.js`. Quelqu'un qui rejoint un autre serveur du bot sans être membre du principal est expulsé et reçoit un MP avec le lien du principal (le bot crée un lien permanent s'il n'y en a pas dans `RESEAU.lienPrincipal`). Les serveurs listés dans `RESEAU.serveursLibres` sont exemptés.
+- Quand le bot rejoint un nouveau serveur : tous les bans en cours du réseau y sont appliqués ; ses bans existants sont importés dans le réseau seulement si le bot a été ajouté par un Exécutif ou un Fondateur (ou si le serveur leur appartient).
+- `/reseau synchroniser` (Fondateur) refait la synchronisation sur tous les serveurs ; option `importer:True` pour importer les bans existants de chaque serveur.
+- Permissions du bot sur chaque serveur : Bannir, Expulser, Voir les logs du serveur ; sur le principal aussi Créer une invitation.
+- Conseil : désactiver « Public Bot » dans le portail développeur Discord, pour que personne d'autre ne puisse ajouter le bot.
