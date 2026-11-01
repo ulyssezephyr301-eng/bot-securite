@@ -165,7 +165,10 @@ async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dur
     .setTitle(`${LABELS[type]} sur ${guild.name}`)
     .addFields({ name: 'Raison', value: raison.slice(0, 1000) });
   if (dureeMs) dm.addFields({ name: 'Durée', value: formatDuree(dureeMs) });
-  await user.send({ embeds: [dm] }).catch(() => {});
+  if (type === 'ban' || type === 'mute') {
+    dm.addFields({ name: 'Portée', value: type === 'ban' ? 'Ce bannissement est valable sur **tous les serveurs du réseau**.' : 'Ce mute est valable sur **tous les serveurs du réseau** où tu es membre.' });
+  }
+  const mp = await user.send({ embeds: [dm] }).then(() => true).catch(() => false);
 
   const motifAudit = `${raison} (par ${moderateur.username ?? moderateur.tag})`.slice(0, 500);
   try {
@@ -219,7 +222,7 @@ async function appliquerSanction({ guild, cibleId, moderateur, type, raison, dur
   if (type === 'mute' || type === 'ban') {
     propage = await propager({ origine: guild, cibleId, user, type, dureeMs, raison, moderateur, id });
   }
-  return { ok: true, id, palier, propage, jeu };
+  return { ok: true, id, palier, propage, jeu, mp };
 }
 
 /* ---------- Ban / unban en jeu (ER:LC) ---------- */

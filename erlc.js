@@ -270,6 +270,8 @@ async function resoudreRoblox({ userId, membre, pseudo }) {
     if (compte) { await memoriser(userId, compte); return compte; }
     return null;
   }
+  const verif = userId ? await base.getVerificationParDiscord(userId).catch(() => null) : null;
+  if (verif) return { id: verif.roblox_id, nom: verif.roblox_name };
   if (membre) {
     const compte = await trouverCompteRoblox(membre.nickname ?? membre.user.username);
     if (compte) { await memoriser(userId, compte); return compte; }

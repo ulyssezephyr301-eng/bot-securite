@@ -5,6 +5,16 @@ const base = require('./database');
 const { niveau, COULEURS, envoyerSanctionLog } = require('./utils');
 
 const pause = (ms) => new Promise(r => setTimeout(r, ms));
+
+// MP au joueur dont le ban est étendu à tout le réseau (il n'est pas forcément sur les serveurs concernés)
+async function mpBanImporte(client, userId, serveur, raison) {
+  const user = await client.users.fetch(userId).catch(() => null);
+  if (!user) return false;
+  const embed = new EmbedBuilder().setColor(COULEURS.ban)
+    .setTitle('Bannissement étendu à tout le réseau')
+    .setDescription(`Tu as été banni de **${serveur}**${raison ? ` (${String(raison).slice(0, 300)})` : ''}. Ce bannissement est maintenant valable sur **tous les serveurs du réseau**.`);
+  return user.send({ embeds: [embed] }).then(() => true).catch(() => false);
+}
 const principal = (client) => client.guilds.cache.get(config.ERLC.GUILD_ID) ?? null;
 const tousLesServeurs = (client) => [...client.guilds.cache.values()];
 
@@ -128,7 +138,7 @@ async function ajouteurDeConfiance(client, guild) {
  * 2) si `importer` : ajoute au réseau les bans déjà présents sur `guild` et les répercute sur les autres serveurs.
  */
 async function synchroniserServeur(client, guild, { importer = false } = {}) {
-  const rapport = { serveur: guild.name, applique: 0, deja: 0, echec: 0, importTente: importer, importe: 0, propage: 0, echecPropage: 0, erreur: null };
+  const rapport = { serveur: guild.name, applique: 0, deja: 0, echec: 0, importTente: importer, importe: 0, propage: 0, echecPropage: 0, mpEnvoyes: 0, mpEchecs: 0, erreur: null };
 
   let locaux;
   try {
@@ -158,6 +168,10 @@ async function synchroniserServeur(client, guild, { importer = false } = {}) {
       const motif = `[Import] Ban du serveur ${guild.name}${raison ? ` : ${raison}` : ''}`.slice(0, 500);
       await base.addSanction({ guildId: guild.id, userId: id, moderatorId: client.user.id, type: 'ban', reason: motif, durationMs: null, expiresAt: null });
       rapport.importe++;
+      if (config.RESEAU.mpBansImportes) {
+        if (await mpBanImporte(client, id, guild.name, raison)) rapport.mpEnvoyes++; else rapport.mpEchecs++;
+        await pause(config.RESEAU.pauseMpMs);
+      }
       for (const autre of tousLesServeurs(client)) {
         if (autre.id === guild.id) continue;
         try { await autre.members.ban(id, { reason: motif }); rapport.propage++; } catch { rapport.echecPropage++; }
@@ -181,7 +195,8 @@ async function journaliserSync(client, guild, rapport, { auto = true } = {}) {
     if (rapport.importTente) {
       embed.addFields({
         name: 'Bans de ce serveur importés dans le réseau',
-        value: `${rapport.importe} importé(s), répercutés ${rapport.propage} fois sur les autres serveurs${rapport.echecPropage ? ` (${rapport.echecPropage} échec(s))` : ''}`,
+        value: `${rapport.importe} importé(s), répercutés ${rapport.propage} fois sur les autres serveurs${rapport.echecPropage ? ` (${rapport.echecPropage} échec(s))` : ''}` +
+          (config.RESEAU.mpBansImportes ? `\nMP aux joueurs : ${rapport.mpEnvoyes} envoyé(s), ${rapport.mpEchecs} impossible(s)` : ''),
       });
     } else if (auto) {
       embed.addFields({

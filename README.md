@@ -78,3 +78,24 @@ Render sort d'une plage d'adresses partagée (« any IP within its ranges ») : 
 - `/reseau synchroniser` (Fondateur) refait la synchronisation sur tous les serveurs ; option `importer:True` pour importer les bans existants de chaque serveur.
 - Permissions du bot sur chaque serveur : Bannir, Expulser, Voir les logs du serveur ; sur le principal aussi Créer une invitation.
 - Conseil : désactiver « Public Bot » dans le portail développeur Discord, pour que personne d'autre ne puisse ajouter le bot.
+
+## Vérification des comptes Roblox
+- `/verification panneau` (Exécutif et Fondateur) poste un bouton « Se vérifier » : le membre tape son pseudo Roblox, le bot contrôle que le compte existe, puis (`VERIF.preuve: 'code'`) lui donne un code à coller dans la description de son profil Roblox. Une fois le code trouvé, le membre est renommé avec le pseudo du compte (et reçoit le rôle `VERIF.roleVerifie` s'il est défini). Un compte Roblox ne peut être lié qu'à un seul membre.
+- `/verification jeu actif:True` active l'expulsion en jeu : un compte non vérifié (ou dont le propriétaire a quitté le serveur principal) reçoit un MP en jeu puis est expulsé après `VERIF.kickJeu.delaiAvantKickSec` secondes. Le propriétaire, les co-propriétaires et le staff en jeu ne sont jamais touchés. Impossible d'activer tant qu'aucun compte n'est vérifié.
+- `/verification statut` et `/verification retirer @membre`.
+- Le compte vérifié sert aussi pour le ban / unban en jeu et pour `/info-joueur`.
+- Les expulsions en jeu utilisent les commandes ER:LC : elles demandent que l'adresse IP du bot soit dans les IP de confiance (voir plus haut).
+
+## MP des sanctions
+Un joueur sanctionné reçoit un MP, même s'il n'est pas sur le serveur (mute et ban : « valable sur tous les serveurs du réseau »). `/sanction-*` indique au modérateur si le MP est bien arrivé. Quand le ban d'un nouveau serveur est importé dans le réseau, les joueurs concernés reçoivent aussi un MP (`RESEAU.mpBansImportes`).
+
+## Connexion avec Roblox (OAuth)
+Le membre clique sur « Se vérifier » puis « Se connecter avec Roblox » : il arrive sur la page officielle de Roblox, autorise la connexion, et le bot reçoit seulement l'identifiant du compte (jamais le mot de passe). Aucun jeton n'est conservé (ils sont révoqués aussitôt).
+Mise en place :
+1. Dans le Creator Hub de Roblox, crée une application OAuth 2.0 (le compte qui la crée doit remplir les conditions de Roblox, notamment la vérification d'identité).
+2. Autorisations : `openid` et `profile`. URL de redirection : celle affichée par `/verification statut` (`https://ton-service.onrender.com/oauth/roblox/callback`).
+3. URL de politique de confidentialité : `https://ton-service.onrender.com/confidentialite` ; URL des conditions : `https://ton-service.onrender.com/conditions` (pages fournies par le bot).
+4. Sur Render, ajoute `ROBLOX_CLIENT_ID` et `ROBLOX_CLIENT_SECRET` (Render fournit tout seul `RENDER_EXTERNAL_URL` ; `PUBLIC_URL` sert seulement si tu as un domaine personnalisé).
+5. `/verification statut` doit afficher « Connexion Roblox : Configurée », puis `/verification panneau`.
+- Tant que l'application n'est pas validée par Roblox, le nombre de personnes pouvant s'y connecter est limité : il faut la soumettre à la validation de Roblox. En attendant (ou si OAuth n'est pas configuré), le bot utilise la méthode du code dans la description (`VERIF.mode: 'code'` pour la forcer).
+- Garde le service Render éveillé (UptimeRobot) : le retour de Roblox arrive sur ce service.

@@ -36,6 +36,35 @@ async function avatarRoblox(id) {
   }
 }
 
+// Compte Roblox dont le pseudo est EXACTEMENT celui-ci (comptes actifs seulement)
+async function compteRobloxExact(pseudo) {
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(String(pseudo ?? ''))) return null;
+  try {
+    const res = await fetch('https://users.roblox.com/v1/usernames/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usernames: [pseudo], excludeBannedUsers: true }),
+    });
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    const u = data?.[0];
+    return u ? { id: u.id, nom: u.name, affichage: u.displayName } : null;
+  } catch {
+    return null;
+  }
+}
+
+// Profil public (nom, description...) d'un compte Roblox
+async function profilRoblox(id) {
+  try {
+    const res = await fetch(`https://users.roblox.com/v1/users/${id}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 // IDs Roblox -> pseudos (Map "id" -> "pseudo")
 async function nomsRoblox(ids) {
   const uniques = [...new Set(ids.filter(Boolean).map(Number))].filter(n => Number.isFinite(n)).slice(0, 100);
@@ -54,4 +83,4 @@ async function nomsRoblox(ids) {
   }
 }
 
-module.exports = { trouverCompteRoblox, avatarRoblox, nomsRoblox };
+module.exports = { trouverCompteRoblox, compteRobloxExact, profilRoblox, avatarRoblox, nomsRoblox };

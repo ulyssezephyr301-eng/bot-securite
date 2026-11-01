@@ -43,6 +43,7 @@ module.exports = {
     igCommande: 5,    // /ig commande (commande ER:LC libre)
     igDiagnostic: 5,  // /ig diagnostic
     reseau: 5,        // /reseau synchroniser
+    verification: 4,  // /verification (panneau, jeu, statut, retirer)
   },
 
   // Durée maximale de mute selon le niveau (Discord limite de toute façon les timeouts à 28 jours)
@@ -139,6 +140,24 @@ module.exports = {
     lienPrincipal: '',   // lien d'invitation du serveur principal envoyé en MP (vide = le bot en crée un)
     importerBans: true,  // quand le bot rejoint un serveur : importer aussi ses bans (seulement si le bot a été ajouté par un Exécutif ou un Fondateur)
     pauseMs: 400,        // pause entre deux bans, pour respecter les limites de Discord
+    mpBansImportes: true, // MP aux joueurs dont le ban est étendu au réseau (même s'ils ne sont pas sur le serveur)
+    pauseMpMs: 1200,     // pause entre deux MP (anti-spam Discord)
+  },
+
+  // Vérification des comptes Roblox (sur le serveur principal)
+  VERIF: {
+    mode: 'auto',          // 'auto' : connexion Roblox (OAuth) si elle est configurée, sinon code dans la description ; 'code' : toujours le code
+    oauthValiditeMin: 10,  // durée de validité du lien « Se connecter avec Roblox »
+    preuve: 'code',        // (méthode du code) 'code' : le joueur colle un code dans la description de son profil Roblox (recommandé, prouve que le compte est à lui)
+                           // 'aucune' : on vérifie seulement que le compte existe
+    roleVerifie: '',       // ID d'un rôle donné après vérification (facultatif)
+    codeValiditeMin: 15,   // durée de validité du code
+    kickJeu: {
+      intervalleMs: 20_000,        // contrôle des joueurs en jeu toutes les 20 secondes
+      delaiAvantKickSec: 60,       // MP d'avertissement, puis expulsion après ce délai
+      maxKicksParCycle: 10,
+      idsRobloxExemptes: [],       // IDs Roblox jamais expulsés (en plus du propriétaire, des co-propriétaires et du staff en jeu)
+    },
   },
 
   ANTINUKE: {

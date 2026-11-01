@@ -4,16 +4,11 @@ const path = require('path');
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const { initDatabase } = require('./database');
 const http = require('http');
+const oauth = require('./oauth');
 
 // Une erreur isolée ne doit pas arrêter le bot
 process.on('unhandledRejection', (err) => console.error('Promesse rejetée non gérée :', err));
 process.on('uncaughtException', (err) => console.error('Exception non gérée :', err));
-
-// Mini serveur web : Render exige un port ouvert, et un service de "ping" peut ainsi garder le bot éveillé
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('Bot en ligne');
-}).listen(process.env.PORT || 3000);
 
 const client = new Client({
   intents: [
@@ -29,6 +24,15 @@ const client = new Client({
 client.commands = new Collection();
 client.buttons = new Collection();
 client.modals = new Collection();
+
+// Serveur web : garde le bot éveillé sur Render (ping) et reçoit le retour de la connexion Roblox (OAuth)
+http.createServer((req, res) => {
+  oauth.gerer(req, res, client).catch((err) => {
+    console.error('Erreur serveur web :', err.message);
+    if (!res.headersSent) res.writeHead(500);
+    res.end();
+  });
+}).listen(process.env.PORT || 3000);
 
 // Chargement des commandes
 for (const file of fs.readdirSync(path.join(__dirname, 'commands')).filter(f => f.endsWith('.js'))) {

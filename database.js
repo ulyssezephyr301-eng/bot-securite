@@ -61,6 +61,17 @@ async function initDatabase() {
       essais INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS verifications (
+      discord_id TEXT PRIMARY KEY,
+      roblox_id TEXT NOT NULL UNIQUE,
+      roblox_name TEXT NOT NULL,
+      verified_at INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS oauth_attente (
+      state TEXT PRIMARY KEY,
+      discord_id TEXT NOT NULL,
+      expire INTEGER NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS settings (
       guild_id TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -261,6 +272,50 @@ async function incrAttenteJeu(id) {
   await db.execute({ sql: `UPDATE jeu_attente SET essais = essais + 1 WHERE id = ?`, args: [id] });
 }
 
+/* ---------- Comptes Roblox vérifiés (un compte Roblox = un seul membre Discord) ---------- */
+async function setVerification({ discordId, robloxId, robloxName }) {
+  await db.batch([
+    { sql: `DELETE FROM verifications WHERE discord_id = ?`, args: [discordId] },
+    { sql: `INSERT INTO verifications (discord_id, roblox_id, roblox_name, verified_at) VALUES (?, ?, ?, ?)`, args: [discordId, robloxId, robloxName, Date.now()] },
+  ], 'write');
+}
+
+async function getVerificationParDiscord(discordId) {
+  const r = await db.execute({ sql: `SELECT * FROM verifications WHERE discord_id = ?`, args: [discordId] });
+  return r.rows[0] ?? null;
+}
+
+async function getVerificationParRoblox(robloxId) {
+  const r = await db.execute({ sql: `SELECT * FROM verifications WHERE roblox_id = ?`, args: [String(robloxId)] });
+  return r.rows[0] ?? null;
+}
+
+async function deleteVerification(discordId) {
+  await db.execute({ sql: `DELETE FROM verifications WHERE discord_id = ?`, args: [discordId] });
+}
+
+async function countVerifications() {
+  const r = await db.execute({ sql: `SELECT COUNT(*) AS n FROM verifications`, args: [] });
+  return Number(r.rows[0].n);
+}
+
+/* ---------- Connexions Roblox (OAuth) en cours : un lien = un usage ---------- */
+async function addOauthAttente(state, discordId, expire) {
+  await db.execute({ sql: `INSERT INTO oauth_attente (state, discord_id, expire) VALUES (?, ?, ?)`, args: [state, discordId, expire] });
+}
+
+// Lit puis supprime : un lien ne peut servir qu'une seule fois
+async function takeOauthAttente(state) {
+  const r = await db.execute({ sql: `SELECT * FROM oauth_attente WHERE state = ?`, args: [state] });
+  const ligne = r.rows[0] ?? null;
+  if (ligne) await db.execute({ sql: `DELETE FROM oauth_attente WHERE state = ?`, args: [state] });
+  return ligne;
+}
+
+async function purgeOauthAttente(now) {
+  await db.execute({ sql: `DELETE FROM oauth_attente WHERE expire < ?`, args: [now] });
+}
+
 /* ---------- Réglages ---------- */
 async function getSetting(guildId, key) {
   const r = await db.execute({ sql: `SELECT value FROM settings WHERE guild_id = ? AND key = ?`, args: [guildId, key] });
@@ -283,5 +338,7 @@ module.exports = {
   addNote, getNotes, countNotes,
   getMots, setMot, deleteMot,
   setLienRoblox, getLienRoblox, addAttenteJeu, getAttenteJeu, deleteAttenteJeu, incrAttenteJeu,
+  setVerification, getVerificationParDiscord, getVerificationParRoblox, deleteVerification, countVerifications,
+  addOauthAttente, takeOauthAttente, purgeOauthAttente,
   getSetting, setSetting,
 };
