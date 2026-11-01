@@ -20,7 +20,10 @@ module.exports = {
 
     // Bloxlink renomme les membres avec leur pseudo Roblox : on le relit ici
     const pseudo = membre.nickname ?? user.username;
-    const roblox = await trouverCompteRoblox(pseudo);
+    const verif = await base.getVerificationParDiscord(user.id).catch(() => null);
+    const roblox = verif
+      ? { id: verif.roblox_id, nom: verif.roblox_name, affichage: verif.roblox_name }
+      : await trouverCompteRoblox(pseudo);
 
     const roles = membre.roles.cache
       .filter(r => r.id !== i.guild.id)
@@ -42,7 +45,7 @@ module.exports = {
       embed.setURL(`https://www.roblox.com/users/${roblox.id}/profile`);
       embed.addFields({
         name: '🎮 Compte Roblox',
-        value: `**${roblox.nom}** (affichage : ${roblox.affichage})\nID : \`${roblox.id}\`\n[Voir le profil](https://www.roblox.com/users/${roblox.id}/profile)`,
+        value: `${verif ? '✅ **Compte vérifié**\n' : ''}**${roblox.nom}** (affichage : ${roblox.affichage})\nID : \`${roblox.id}\`\n[Voir le profil](https://www.roblox.com/users/${roblox.id}/profile)`,
       });
       const avatar = await avatarRoblox(roblox.id);
       embed.setThumbnail(avatar ?? user.displayAvatarURL());

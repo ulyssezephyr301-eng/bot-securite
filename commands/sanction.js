@@ -20,6 +20,7 @@ async function sanctionner(i, type, dureeMs = null) {
   });
   if (!res.ok) return i.editReply(`❌ ${res.erreur}`);
   let txt = `✅ **${LABELS[type]}** (#${res.id}) appliqué à ${user}${dureeMs ? ` pour **${formatDuree(dureeMs)}**` : ''}.\n**Raison :** ${raison}`;
+  txt += res.mp ? '\n📩 Le joueur a reçu un MP.' : "\n⚠️ MP impossible (MP fermés ou aucun serveur en commun).";
   if (res.palier) txt += `\n⚠️ Palier automatique atteint : **${LABELS[res.palier.action]}** appliqué (#${res.palier.id}).`;
   if (res.propage && res.propage.total > 0) txt += `\n🌐 Répercuté sur **${res.propage.ok}/${res.propage.total}** autre(s) serveur(s).`;
   if (res.jeu) txt += texteJeu(res.jeu, 'ban');

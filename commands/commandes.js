@@ -7,7 +7,7 @@ const GRADES = { 1: 'Guide', 2: 'Modérateur', 3: 'Administrateur', 4: 'Exécuti
 // Niveau minimum par défaut si une ligne manque dans config.js > NIVEAU_MIN
 const DEFAUTS = {
   ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5, igDiagnostic: 5,
-  mots: 3, publierCommandes: 3, reseau: 5, aide: 1,
+  mots: 3, publierCommandes: 3, reseau: 5, verification: 4, aide: 1,
 };
 const niveauAction = (action) => config.NIVEAU_MIN[action] ?? DEFAUTS[action];
 const nomGrade = (n) => (n ? (n >= 5 ? GRADES[5] : `${GRADES[n]} et +`) : null);
@@ -26,7 +26,7 @@ const CATEGORIES = [
   { titre: '📨 Demandes de sanction', cmds: [['demande-sanction', 'demande']] },
   { titre: '📋 Suivi des joueurs', cmds: [['sanction', { voir: 'voirSanctions', 'mute-actif': 'voirSanctions' }], ['info-joueur', 'infoJoueur']] },
   { titre: '🧹 Gestion des salons', cmds: [['clear', 'clear'], ['lockdown', 'lockdown'], ['unlock', 'lockdown'], ['slowmode', 'lockdown']] },
-  { titre: '⚙️ Configuration et réseau', cmds: [['config', 'config'], ['mots', 'mots'], ['reseau', 'reseau']] },
+  { titre: '⚙️ Configuration et réseau', cmds: [['config', 'config'], ['mots', 'mots'], ['reseau', 'reseau'], ['verification', 'verification']] },
   { titre: '📖 Aide', cmds: [['commandes', 'aide']] },
 ];
 
@@ -94,6 +94,7 @@ const CAPACITES = [
   ['igCommande', '/ig commande'],
   ['igDiagnostic', '/ig diagnostic'],
   ['reseau', '/reseau synchroniser'],
+  ['verification', '/verification'],
 ];
 
 /* ---------- Commandes cliquables ---------- */
@@ -138,6 +139,23 @@ function lignes(client, ids, nom, action, subsFiltre = null) {
   return [`${mention(ids, nom)} — ${json.description}${suffixe(action)}`];
 }
 
+// Ajoute une catégorie ; si elle dépasse la limite d'un champ Discord (1024 caractères), elle est répartie sur plusieurs champs
+function ajouterChamps(embed, titre, lignesTexte) {
+  let bloc = '';
+  let premier = true;
+  const vider = () => {
+    if (!bloc) return;
+    embed.addFields({ name: premier ? titre : '\u200b', value: bloc });
+    premier = false;
+    bloc = '';
+  };
+  for (const l of lignesTexte) {
+    if (bloc && (bloc + '\n' + l).length > 1000) vider();
+    bloc = bloc ? `${bloc}\n${l}` : l.slice(0, 1000);
+  }
+  vider();
+}
+
 /* ---------- Message 1 : modération ---------- */
 function embedModeration(client, ids) {
   const embed = new EmbedBuilder()
@@ -148,12 +166,12 @@ function embedModeration(client, ids) {
   const connues = new Set(['ig']);
   for (const cat of CATEGORIES) {
     const l = cat.cmds.flatMap(([nom, action, subs]) => { connues.add(nom); return lignes(client, ids, nom, action, subs); });
-    if (l.length) embed.addFields({ name: cat.titre, value: l.join('\n').slice(0, 1024) });
+    if (l.length) ajouterChamps(embed, cat.titre, l);
   }
 
   // Commandes ajoutées plus tard et pas encore classées
   const autres = [...client.commands.keys()].filter(n => !connues.has(n)).flatMap(n => lignes(client, ids, n, null));
-  if (autres.length) embed.addFields({ name: '➕ Autres', value: autres.join('\n').slice(0, 1024) });
+  if (autres.length) ajouterChamps(embed, '➕ Autres', autres);
   return embed;
 }
 
@@ -172,7 +190,7 @@ function embedJeu(ids) {
       const g = grade(action);
       return `${mention(ids, 'ig', sub)} — ${texte}${g ? ` — **${g}**` : ''}`;
     });
-    embed.addFields({ name: groupe.titre, value: l.join('\n').slice(0, 1024) });
+    ajouterChamps(embed, groupe.titre, l);
   }
 
   embed.addFields({
@@ -212,10 +230,17 @@ function embedGrades() {
         'Toutes les commandes (réussies ou non) sont enregistrées dans le salon des commandes.',
     },
     {
+      name: '✅ Vérification Roblox',
+      value:
+        'Chaque membre se vérifie avec le bouton **Se vérifier** (pseudo Roblox, puis un code à coller dans la description de son profil) : son pseudo Discord devient son pseudo Roblox. ' +
+        "En jeu, un compte non vérifié (ou dont le propriétaire a quitté le serveur principal) reçoit un MP puis est expulsé après un délai, si l'expulsion est activée avec `/verification jeu`.",
+    },
+    {
       name: '🌐 Réseau de serveurs',
       value:
         '• Les mutes et les bans sont répercutés sur **tous** les serveurs du bot.\n' +
         '• Quelqu\'un qui rejoint un autre serveur sans être sur le **serveur principal** est expulsé et reçoit un MP lui demandant de rejoindre d\'abord le principal.\n' +
+        '• Un joueur sanctionné reçoit un MP (mute ou ban valable sur tout le réseau), même s\'il n\'est pas sur le serveur ; le modérateur voit si le MP est bien arrivé.\n' +
         '• Quand le bot rejoint un nouveau serveur, tous les bans du réseau y sont appliqués ; ses bans existants sont importés si le bot a été ajouté par un Exécutif ou un Fondateur.',
     },
     {
