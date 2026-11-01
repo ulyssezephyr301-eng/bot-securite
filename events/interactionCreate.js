@@ -5,11 +5,13 @@ const { EPH, envoyerLogCommande } = require('../utils');
 const NOMS_BOUTONS = {
   sc: 'Suppression de sanction (confirmée)',
   dem_ok: 'Demande de sanction acceptée',
+  verif_ok: 'Vérification Roblox (code contrôlé)',
 };
 
 // Fenêtres (formulaires) journalisées
 const NOMS_MODALS = {
   dem_refus: 'Demande de sanction refusée',
+  verif_pseudo: 'Vérification Roblox (pseudo envoyé)',
 };
 
 function decrire(options = []) {
@@ -123,8 +125,8 @@ module.exports = {
       const etat = surveiller(interaction);
       let details = `fenêtre : ${interaction.customId}`;
       try {
-        const raison = interaction.fields.fields.get('raison')?.value;
-        if (raison) details += `\nRaison : ${raison.slice(0, 300)}`;
+        const saisies = [...interaction.fields.fields.values()].map(c => `${c.customId} : ${String(c.value).slice(0, 300)}`);
+        if (saisies.length) details += `\n${saisies.join('\n')}`;
         await handler(interaction);
       } catch (err) {
         etat.ok = false;
