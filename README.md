@@ -4,8 +4,8 @@
 1. `npm install`
 2. Copie `.env.example` en `.env` et remplis-le (token Discord, CLIENT_ID, URL + token Turso).
 3. Ouvre `config.js` : les grades Bruxelles RP sont déjà remplis. Pour un autre serveur, ajoute les IDs de ses rôles dans `ROLES_NIVEAUX`.
-4. `npm run deploy` (enregistre les commandes slash, à refaire si tu ajoutes/modifies une commande)
-5. `npm start`
+4. `npm start` : le bot enregistre tout seul ses commandes slash auprès de Discord quand elles changent (`npm run deploy` reste possible à la main)
+5. Sur Render : Start Command = `npm start` (surtout pas `npm run deploy && npm start`, qui peut rester bloqué si Discord limite les enregistrements)
 
 ## Portail développeur Discord
 - Onglet **Bot** : active **Server Members Intent** et **Message Content Intent**.
@@ -99,3 +99,7 @@ Mise en place :
 5. `/verification statut` doit afficher « Connexion Roblox : Configurée », puis `/verification panneau`.
 - Tant que l'application n'est pas validée par Roblox, le nombre de personnes pouvant s'y connecter est limité : il faut la soumettre à la validation de Roblox. En attendant (ou si OAuth n'est pas configuré), le bot utilise la méthode du code dans la description (`VERIF.mode: 'code'` pour la forcer).
 - Garde le service Render éveillé (UptimeRobot) : le retour de Roblox arrive sur ce service.
+
+## Render : le déploiement reste bloqué (« No open ports detected »)
+Cause fréquente : la commande de démarrage `npm run deploy && npm start` attend Discord (limite d'enregistrement des commandes) et n'arrive jamais à `npm start`, donc aucun port n'est ouvert.
+Solution : dans Render > Settings > Start Command, mettre `npm start`. Le bot ouvre son port tout de suite et enregistre ses commandes en arrière-plan (nouvel essai toutes les 30 minutes si Discord refuse).
