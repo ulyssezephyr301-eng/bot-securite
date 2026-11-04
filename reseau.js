@@ -18,13 +18,12 @@ async function mpBanImporte(client, userId, serveur, raison) {
 const principal = (client) => client.guilds.cache.get(config.ERLC.GUILD_ID) ?? null;
 const tousLesServeurs = (client) => [...client.guilds.cache.values()];
 
-// true / false ; relance l'erreur pour tout autre problème (pour ne jamais expulser à tort)
+// Le membre du serveur principal, ou null s'il n'y est pas ; relance l'erreur pour tout autre problème (pour ne jamais expulser à tort)
 async function estDansPrincipal(main, userId) {
   try {
-    await main.members.fetch(userId);
-    return true;
+    return await main.members.fetch(userId);
   } catch (err) {
-    if (err.code === 10007) return false; // Unknown Member
+    if (err.code === 10007) return null; // Unknown Member
     throw err;
   }
 }
@@ -54,6 +53,59 @@ async function lienPrincipal(client) {
 }
 
 /* ---------- Arrivée sur un serveur du réseau ---------- */
+// Deux raisons possibles d'expulsion : absent du serveur principal, ou vérification pas terminée
+const MOTIFS = {
+  absent: {
+    titre: (main) => `Rejoins d'abord ${main.name}`,
+    raison: "Tu n'es pas présent sur le serveur principal.",
+    texte: (guild, main) => `Tu as été retiré de **${guild.name}** : pour y entrer, tu dois **d'abord rejoindre le serveur principal**, **${main.name}**.`,
+    suite: (guild, main) => `Une fois dedans, termine ta vérification (bouton **Se vérifier**), puis tu pourras revenir sur ${guild.name}.`,
+    kick: (main) => `Réseau : doit d'abord rejoindre ${main.name}`,
+    logTitre: 'Expulsion automatique : absent du serveur principal',
+  },
+  nonVerifie: {
+    titre: () => "Termine d'abord ta vérification",
+    raison: "Tu n'as pas fini ta vérification Roblox.",
+    texte: (guild, main) => `Tu as été retiré de **${guild.name}** : tu es bien sur le serveur principal **${main.name}**, mais tu n'as pas encore **terminé ta vérification Roblox**.`,
+    suite: (guild, main) => `Sur ${main.name}, clique sur **Se vérifier** et connecte ton compte Roblox. Ensuite tu pourras revenir sur ${guild.name}.`,
+    kick: () => 'Réseau : vérification non terminée',
+    logTitre: 'Expulsion automatique : vérification non terminée',
+  },
+};
+
+async function expulserArrivee(membre, main, cle) {
+  const m = MOTIFS[cle];
+  const guild = membre.guild;
+  const lien = await lienPrincipal(membre.client);
+
+  const mp = new EmbedBuilder().setColor(COULEURS.kick)
+    .setTitle(m.titre(main))
+    .setDescription(`${m.texte(guild, main)}\n\n${m.suite(guild, main)}${lien ? `\n\n👉 ${lien}` : ''}`)
+    .addFields({ name: 'Raison', value: m.raison });
+  await membre.send({ embeds: [mp] }).catch(() => {}); // MP fermés : tant pis, il est quand même expulsé
+
+  try {
+    await membre.kick(m.kick(main));
+  } catch {
+    await envoyerSanctionLog(main, new EmbedBuilder().setColor(COULEURS.warn)
+      .setTitle('⚠️ Expulsion impossible')
+      .setDescription(`${membre.user} (\`${membre.id}\`) a rejoint **${guild.name}** (${m.raison.toLowerCase()}) mais je n'ai pas pu l'expulser (permission « Expulser des membres » ou rôle trop bas).`)
+      .setTimestamp());
+    return 'echec';
+  }
+
+  const log = new EmbedBuilder().setColor(COULEURS.kick)
+    .setTitle(m.logTitre)
+    .addFields(
+      { name: 'Joueur', value: `${membre.user} (\`${membre.id}\`)`, inline: true },
+      { name: 'Serveur rejoint', value: guild.name, inline: true },
+      { name: 'Raison', value: m.raison },
+    ).setTimestamp();
+  await envoyerSanctionLog(guild, log);
+  await envoyerSanctionLog(main, log);
+  return 'expulse';
+}
+
 async function controlerArrivee(membre) {
   const client = membre.client;
   const guild = membre.guild;
@@ -63,44 +115,19 @@ async function controlerArrivee(membre) {
   const main = principal(client);
   if (!main) return 'ignore'; // serveur principal introuvable : on ne bloque personne
 
-  let dedans;
+  let dansPrincipal;
   try {
-    dedans = await estDansPrincipal(main, membre.id);
+    dansPrincipal = await estDansPrincipal(main, membre.id);
   } catch (err) {
     console.error('Vérification du serveur principal impossible :', err.message);
     return 'ignore';
   }
-  if (dedans) return 'ignore';
+  if (!dansPrincipal) return expulserArrivee(membre, main, 'absent');
 
-  const lien = await lienPrincipal(client);
-  const mp = new EmbedBuilder().setColor(COULEURS.kick)
-    .setTitle(`Rejoins d'abord ${main.name}`)
-    .setDescription(
-      `Tu as été retiré de **${guild.name}** : pour y entrer, tu dois **d'abord rejoindre le serveur principal**, **${main.name}**.\n\n` +
-      (lien ? `👉 ${lien}\n\n` : '') +
-      `Une fois dedans, tu pourras revenir sur ${guild.name}.`,
-    );
-  await membre.send({ embeds: [mp] }).catch(() => {}); // MP fermés : tant pis, il est quand même expulsé
-
-  try {
-    await membre.kick(`Réseau : doit d'abord rejoindre ${main.name}`);
-  } catch {
-    await envoyerSanctionLog(main, new EmbedBuilder().setColor(COULEURS.warn)
-      .setTitle('⚠️ Expulsion impossible')
-      .setDescription(`${membre.user} (\`${membre.id}\`) a rejoint **${guild.name}** sans être sur le serveur principal, mais je n'ai pas pu l'expulser (permission « Expulser des membres » ou rôle trop bas).`)
-      .setTimestamp());
-    return 'echec';
-  }
-
-  const log = new EmbedBuilder().setColor(COULEURS.kick)
-    .setTitle('Expulsion automatique : serveur principal manquant')
-    .addFields(
-      { name: 'Joueur', value: `${membre.user} (\`${membre.id}\`)`, inline: true },
-      { name: 'Serveur rejoint', value: guild.name, inline: true },
-    ).setTimestamp();
-  await envoyerSanctionLog(guild, log);
-  await envoyerSanctionLog(main, log);
-  return 'expulse';
+  // Sur le principal, mais toujours avec le rôle « non vérifié » : vérification pas terminée
+  const role = config.VERIF.roleNonVerifie;
+  if (role && dansPrincipal.roles?.cache?.has(role)) return expulserArrivee(membre, main, 'nonVerifie');
+  return 'ignore';
 }
 
 /* ---------- Bans communs à tous les serveurs ---------- */

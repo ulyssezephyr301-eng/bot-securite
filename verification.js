@@ -5,7 +5,7 @@ const { EmbedBuilder } = require('discord.js');
 const config = require('./config');
 const base = require('./database');
 const erlc = require('./erlc');
-const { profilRoblox } = require('./roblox');
+const { profilRoblox, avatarRoblox } = require('./roblox');
 const { COULEURS, envoyerLog, envoyerSanctionLog } = require('./utils');
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans 0/O ni 1/I pour éviter les confusions
@@ -44,27 +44,64 @@ async function controlerCode(discordId) {
   return { ok: true, compte: { id: p.robloxId, nom: profil.name ?? p.nom } };
 }
 
-/* ---------- Enregistrement : liaison, renommage, rôle ---------- */
-async function finaliser(guild, membre, compte) {
+/* ---------- Rôles du serveur principal ---------- */
+// Nouveau membre : rôle « non vérifié ». Vérification faite : il le perd et reçoit « sans papier ».
+async function passerNonVerifie(membre, raison = 'Vérification à faire') {
+  const { roleNonVerifie, roleSansPapier } = config.VERIF;
+  let ok = true;
+  if (roleNonVerifie) { try { await membre.roles.add(roleNonVerifie, raison); } catch { ok = false; } }
+  if (roleSansPapier) { try { await membre.roles.remove(roleSansPapier, raison); } catch { ok = false; } }
+  return ok;
+}
+
+async function passerVerifie(membre, raison = 'Vérification Roblox') {
+  const { roleNonVerifie, roleSansPapier } = config.VERIF;
+  let ok = true;
+  if (roleNonVerifie) { try { await membre.roles.remove(roleNonVerifie, raison); } catch { ok = false; } }
+  if (roleSansPapier) { try { await membre.roles.add(roleSansPapier, raison); } catch { ok = false; } }
+  return ok;
+}
+
+/* ---------- Annonce de chaque vérification ---------- */
+async function annoncer(guild, membre, compte, { ancienPseudo, methode, renomme }) {
+  const avatar = await avatarRoblox(compte.id);
+  const maintenant = Math.floor(Date.now() / 1000);
+  const username = membre.user?.username;
+  const embed = new EmbedBuilder().setColor(COULEURS.unmute)
+    .setTitle('✅ Vérification effectuée')
+    .setDescription(`Le membre <@${membre.id}> a fait sa vérification.`)
+    .addFields(
+      { name: 'Ancien pseudo Discord', value: `${ancienPseudo}${username && username !== ancienPseudo ? ` (@${username})` : ''}`.slice(0, 200), inline: true },
+      { name: 'ID Discord', value: `\`${membre.id}\``, inline: true },
+      { name: 'Nouveau pseudo', value: renomme ? compte.nom : '⚠️ non renommé (rôle du bot trop bas ?)', inline: true },
+      { name: 'Compte Roblox', value: `[${compte.nom}](https://www.roblox.com/users/${compte.id}/profile)`, inline: true },
+      { name: 'ID Roblox', value: `\`${compte.id}\``, inline: true },
+      { name: 'Méthode', value: methode === 'oauth' ? 'Connexion Roblox (OAuth)' : 'Code dans la description', inline: true },
+      { name: 'Vérifié', value: `<t:${maintenant}:F> (<t:${maintenant}:R>)` },
+    ).setTimestamp();
+  if (avatar) embed.setThumbnail(avatar);
+
+  const id = config.VERIF.salonVerifications;
+  const salon = id ? (guild.channels.cache.get(id) ?? (await guild.channels.fetch(id).catch(() => null))) : null;
+  if (salon?.isTextBased()) {
+    await salon.send({ content: `<@${membre.id}>`, embeds: [embed], allowedMentions: { users: [membre.id] } }).catch(() => {});
+    return true;
+  }
+  await envoyerLog(guild, embed); // salon introuvable : repli sur les logs
+  return false;
+}
+
+/* ---------- Enregistrement : liaison, renommage, rôles, annonce ---------- */
+async function finaliser(guild, membre, compte, methode = 'code') {
+  const ancienPseudo = membre.nickname ?? membre.user?.globalName ?? membre.user?.username ?? String(membre.id);
   await base.setVerification({ discordId: membre.id, robloxId: String(compte.id), robloxName: compte.nom });
   await base.setLienRoblox(membre.id, String(compte.id), compte.nom).catch(() => {});
 
   let renomme = true;
   try { await membre.setNickname(compte.nom, 'Vérification Roblox'); } catch { renomme = false; }
-
-  let role = null;
-  if (config.VERIF.roleVerifie) {
-    try { await membre.roles.add(config.VERIF.roleVerifie, 'Vérification Roblox'); role = true; } catch { role = false; }
-  }
-
-  await envoyerLog(guild, new EmbedBuilder().setColor(COULEURS.unmute)
-    .setTitle('✅ Compte Roblox vérifié')
-    .addFields(
-      { name: 'Membre', value: `${membre.user ?? membre} (\`${membre.id}\`)`, inline: true },
-      { name: 'Compte Roblox', value: `[${compte.nom}](https://www.roblox.com/users/${compte.id}/profile) (\`${compte.id}\`)`, inline: true },
-      { name: 'Pseudo Discord', value: renomme ? `renommé en **${compte.nom}**` : '⚠️ renommage impossible (rôle trop haut ?)' },
-    ).setTimestamp());
-  return { renomme, role };
+  const roles = await passerVerifie(membre);
+  await annoncer(guild, membre, compte, { ancienPseudo, methode, renomme });
+  return { renomme, roles };
 }
 
 /* ---------- Contrôle des joueurs en jeu ---------- */
@@ -155,6 +192,6 @@ async function controlerJoueurs(client) {
 }
 
 module.exports = {
-  preparer, controlerCode, finaliser, estVerifie, evaluerJoueurs, controlerJoueurs,
+  preparer, controlerCode, finaliser, passerVerifie, passerNonVerifie, estVerifie, evaluerJoueurs, controlerJoueurs,
   _enAttente: enAttente,
 };

@@ -103,3 +103,10 @@ Mise en place :
 ## Render : le déploiement reste bloqué (« No open ports detected »)
 Cause fréquente : la commande de démarrage `npm run deploy && npm start` attend Discord (limite d'enregistrement des commandes) et n'arrive jamais à `npm start`, donc aucun port n'est ouvert.
 Solution : dans Render > Settings > Start Command, mettre `npm start`. Le bot ouvre son port tout de suite et enregistre ses commandes en arrière-plan (nouvel essai toutes les 30 minutes si Discord refuse).
+
+## Rôles de vérification et accès aux autres serveurs
+- Chaque nouveau membre du serveur principal reçoit le rôle `VERIF.roleNonVerifie`. Une fois vérifié, il le perd, reçoit `VERIF.roleSansPapier` et son pseudo devient son pseudo Roblox. Un membre déjà vérifié qui revient retrouve directement son statut.
+- Chaque vérification est annoncée dans `VERIF.salonVerifications` : membre pingé, ancien pseudo Discord, ID Discord, compte et ID Roblox, avatar Roblox, heure.
+- Sur les autres serveurs du réseau, un nouveau venu est expulsé s'il n'est pas sur le serveur principal ou s'il a toujours le rôle « non vérifié ». Un MP lui explique la raison. Les membres arrivés avant la mise en place du système n'ont pas ce rôle : ils ne sont pas bloqués.
+- Le rôle du bot doit être au-dessus des deux rôles pour pouvoir les donner et les retirer.
+- `/verification retirer @membre` lui redonne le rôle « non vérifié ».

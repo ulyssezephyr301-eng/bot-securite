@@ -121,7 +121,7 @@ async function traiterCallback(client, params) {
 
   let res;
   try {
-    res = await verification.finaliser(main, membre, { id: robloxId, nom });
+    res = await verification.finaliser(main, membre, { id: robloxId, nom }, 'oauth');
   } catch (err) {
     console.error('Enregistrement de la vérification impossible :', err.message);
     return echec('Enregistrement impossible', 'Réessaie dans quelques instants.');

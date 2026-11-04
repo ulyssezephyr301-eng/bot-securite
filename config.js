@@ -150,7 +150,9 @@ module.exports = {
     oauthValiditeMin: 10,  // durée de validité du lien « Se connecter avec Roblox »
     preuve: 'code',        // (méthode du code) 'code' : le joueur colle un code dans la description de son profil Roblox (recommandé, prouve que le compte est à lui)
                            // 'aucune' : on vérifie seulement que le compte existe
-    roleVerifie: '',       // ID d'un rôle donné après vérification (facultatif)
+    roleNonVerifie: '1564959949497434122',     // donné à CHAQUE nouveau membre du serveur principal, retiré une fois la vérification faite
+    roleSansPapier: '1558228147156033716',     // donné une fois la vérification faite
+    salonVerifications: '1566939812605329448', // salon où le bot annonce chaque vérification
     codeValiditeMin: 15,   // durée de validité du code
     kickJeu: {
       intervalleMs: 20_000,        // contrôle des joueurs en jeu toutes les 20 secondes
