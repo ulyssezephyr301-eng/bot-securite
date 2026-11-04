@@ -51,12 +51,12 @@ async function ouvrirFenetre(i) {
 }
 
 async function terminer(i, compte, edition) {
-  const res = await verification.finaliser(i.guild, i.member, compte);
+  const res = await verification.finaliser(i.guild, i.member, compte, 'code');
   const embed = new EmbedBuilder().setColor(COULEURS.unmute).setTitle('✅ Compte vérifié')
     .setDescription(
       `Ton compte Roblox **${compte.nom}** est vérifié.\n` +
       (res.renomme ? `Ton pseudo Discord est maintenant **${compte.nom}**.` : "Je n'ai pas pu changer ton pseudo Discord (mon rôle est plus bas que le tien) : change-le toi-même en **" + compte.nom + '**.') +
-      (res.role === false ? "\n⚠️ Je n'ai pas pu te donner le rôle « vérifié »." : '') +
+      (res.roles === false ? "\n⚠️ Je n'ai pas pu mettre à jour tes rôles (mon rôle est plus bas que les leurs) : préviens le staff." : '') +
       (config.VERIF.preuve === 'code' ? '\nTu peux maintenant retirer le code de ta description Roblox.' : ''),
     );
   return edition ? i.editReply({ embeds: [embed], components: [] }) : i.editReply({ embeds: [embed] });
@@ -142,6 +142,7 @@ async function statut(i) {
     .addFields(
       { name: 'Comptes vérifiés', value: String(total), inline: true },
       { name: 'Méthode', value: oauth.mode() === 'oauth' ? 'Connexion Roblox (OAuth)' : (config.VERIF.preuve === 'code' ? 'Code dans la description Roblox' : 'Aucune (le compte doit exister)'), inline: true },
+      { name: 'Rôles', value: `Nouveau membre : ${config.VERIF.roleNonVerifie ? `<@&${config.VERIF.roleNonVerifie}>` : '—'}\nAprès vérification : ${config.VERIF.roleSansPapier ? `<@&${config.VERIF.roleSansPapier}>` : '—'}\nAnnonces : ${config.VERIF.salonVerifications ? `<#${config.VERIF.salonVerifications}>` : '—'}`, inline: false },
       { name: 'Expulsion en jeu', value: actif ? `✅ Activée (avertissement, puis expulsion après ${config.VERIF.kickJeu.delaiAvantKickSec} s)` : '❌ Désactivée' , inline: false },
     );
   embed.addFields({
@@ -208,7 +209,9 @@ module.exports = {
     const v = await base.getVerificationParDiscord(user.id);
     if (!v) return i.reply({ content: "❌ Ce membre n'est pas vérifié.", ...EPH });
     await base.deleteVerification(user.id);
-    return i.reply(`✅ Vérification de ${user} retirée (compte Roblox **${v.roblox_name}**). Il devra se revérifier.`);
+    const membre = await i.guild.members.fetch(user.id).catch(() => null);
+    const roles = membre ? await verification.passerNonVerifie(membre, 'Vérification retirée par le staff') : null;
+    return i.reply(`✅ Vérification de ${user} retirée (compte Roblox **${v.roblox_name}**). Il devra se revérifier${roles === true ? ' : il a retrouvé le rôle « non vérifié ».' : roles === false ? " (je n'ai pas pu changer ses rôles)." : '.'}`);
   },
 
   buttons: { verif_start: demarrer, verif_ok: verifierCode },

@@ -161,7 +161,7 @@ function embedModeration(client, ids) {
   const embed = new EmbedBuilder()
     .setColor(0x3498db)
     .setTitle('🛡️ Commandes de modération')
-    .setDescription('Le grade indiqué après chaque commande est le **minimum requis**. Les commandes en jeu (ER:LC) sont dans le message suivant, le résumé par grade et les règles dans le dernier.');
+    .setDescription('Le grade indiqué après chaque commande est le **minimum requis**. Les commandes en jeu (ER:LC) sont dans le message suivant, la vérification, les grades et les règles dans le dernier.');
 
   const connues = new Set(['ig']);
   for (const cat of CATEGORIES) {
@@ -205,24 +205,46 @@ function embedJeu(ids) {
   return embed;
 }
 
-/* ---------- Message 3 : grades et règles ---------- */
+/* ---------- Message 3 : grades, vérification et règles ---------- */
 function embedGrades() {
   const embed = new EmbedBuilder()
     .setColor(0xf1c40f)
-    .setTitle('🏅 Grades, règles et automatismes')
+    .setTitle('🏅 Grades, vérification et règles')
     .setDescription('Chaque grade a **tout ce qui précède** (un Administrateur a aussi les commandes du Guide et du Modérateur). Ci-dessous : ce que chaque grade **ajoute**.');
 
   for (let n = 1; n <= 5; n++) {
     const items = CAPACITES.filter(([action]) => niveauAction(action) === n).map(([, libelle]) => libelle);
     const max = Math.min(config.MUTE_MAX_PAR_NIVEAU[n] ?? 0, config.MUTE_MAX_MS);
-    const mute = max ? `\n⏱️ Mute : ${formatDuree(max)} maximum${n >= 4 ? ' (limite de Discord : 28 jours)' : ''}` : '';
+    const mute = max ? `\n⏱️ Mute : ${formatDuree(max)} maximum${n >= 4 ? ' (limite de Discord)' : ''}` : '';
     embed.addFields({
       name: n === 1 ? `🔹 ${GRADES[n]}` : `🔹 ${GRADES[n]} (en plus)`,
       value: ((items.length ? items.join(' • ') : '—') + mute).slice(0, 1024),
     });
   }
 
+  const v = config.VERIF;
+  const nonVerifie = v.roleNonVerifie ? `<@&${v.roleNonVerifie}>` : 'le rôle « non vérifié »';
+  const sansPapier = v.roleSansPapier ? `<@&${v.roleSansPapier}>` : 'le rôle « sans papier »';
+  const annonces = v.salonVerifications ? `<#${v.salonVerifications}>` : 'le salon des vérifications';
+
   embed.addFields(
+    {
+      name: '✅ Vérification Roblox',
+      value: [
+        `1️⃣ À son arrivée sur le serveur principal, chaque membre reçoit ${nonVerifie}.`,
+        "2️⃣ Il clique sur **Se vérifier** puis sur **Se connecter avec Roblox** : il arrive sur la page officielle de Roblox et autorise la connexion (son mot de passe n'est jamais communiqué).",
+        `3️⃣ Une fois vérifié, il perd ${nonVerifie}, reçoit ${sansPapier}, et son pseudo Discord devient son pseudo Roblox.`,
+        `4️⃣ Chaque vérification est annoncée dans ${annonces} : membre pingé, ancien pseudo, ID Discord, compte et ID Roblox, avatar Roblox, heure.`,
+      ].join('\n'),
+    },
+    {
+      name: '🚪 Accès aux autres serveurs et au jeu',
+      value: [
+        "• Sur un autre serveur du réseau, un nouveau venu est **expulsé** s'il n'est pas sur le serveur principal, ou s'il a **toujours le rôle non vérifié**.",
+        "• Un **MP lui explique la raison** (absent du serveur principal, ou vérification pas terminée) et lui donne le lien du serveur principal.",
+        "• En jeu, un compte Roblox non vérifié (ou dont le propriétaire a quitté le serveur principal) reçoit un message puis est expulsé, si `/verification jeu` est activé.",
+      ].join('\n'),
+    },
     {
       name: '👁️ Visibilité des réponses',
       value:
@@ -230,24 +252,18 @@ function embedGrades() {
         'Toutes les commandes (réussies ou non) sont enregistrées dans le salon des commandes.',
     },
     {
-      name: '✅ Vérification Roblox',
-      value:
-        'Chaque membre se vérifie avec le bouton **Se vérifier** (pseudo Roblox, puis un code à coller dans la description de son profil) : son pseudo Discord devient son pseudo Roblox. ' +
-        "En jeu, un compte non vérifié (ou dont le propriétaire a quitté le serveur principal) reçoit un MP puis est expulsé après un délai, si l'expulsion est activée avec `/verification jeu`.",
-    },
-    {
       name: '🌐 Réseau de serveurs',
-      value:
-        '• Les mutes et les bans sont répercutés sur **tous** les serveurs du bot.\n' +
-        '• Quelqu\'un qui rejoint un autre serveur sans être sur le **serveur principal** est expulsé et reçoit un MP lui demandant de rejoindre d\'abord le principal.\n' +
-        '• Un joueur sanctionné reçoit un MP (mute ou ban valable sur tout le réseau), même s\'il n\'est pas sur le serveur ; le modérateur voit si le MP est bien arrivé.\n' +
+      value: [
+        '• Les mutes et les bans sont répercutés sur **tous** les serveurs du bot.',
+        "• Un joueur sanctionné reçoit un MP (mute ou ban valable sur tout le réseau), même s'il n'est pas sur le serveur ; le modérateur voit si le MP est bien arrivé.",
         '• Quand le bot rejoint un nouveau serveur, tous les bans du réseau y sont appliqués ; ses bans existants sont importés si le bot a été ajouté par un Exécutif ou un Fondateur.',
+      ].join('\n'),
     },
     {
       name: '🛡️ Protections automatiques',
       value:
         'Anti-raid, anti-spam, filtre de mots (insultes : avertissement, propos graves : mute), anti-nuke, bots ajoutés sans autorisation expulsés, limite de sanctions par membre du staff, ' +
-        'paliers d\'avertissements (3 = mute d\'1 h, 5 = expulsion) et fin automatique des bans temporaires.',
+        "paliers d'avertissements (3 = mute d'1 h, 5 = expulsion) et fin automatique des bans temporaires.",
     },
   );
   return embed;
