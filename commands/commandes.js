@@ -7,7 +7,7 @@ const GRADES = { 1: 'Guide', 2: 'Modérateur', 3: 'Administrateur', 4: 'Exécuti
 // Niveau minimum par défaut si une ligne manque dans config.js > NIVEAU_MIN
 const DEFAUTS = {
   ig: 1, igMessage: 1, igKick: 2, igBan: 3, igUnban: 3, igCommande: 5, igDiagnostic: 5,
-  mots: 3, publierCommandes: 3, reseau: 5, verification: 4, aide: 1,
+  mots: 3, publierCommandes: 3, reseau: 5, verification: 4, whitelist: 5, aide: 1,
 };
 const niveauAction = (action) => config.NIVEAU_MIN[action] ?? DEFAUTS[action];
 const nomGrade = (n) => (n ? (n >= 5 ? GRADES[5] : `${GRADES[n]} et +`) : null);
@@ -26,7 +26,7 @@ const CATEGORIES = [
   { titre: '📨 Demandes de sanction', cmds: [['demande-sanction', 'demande']] },
   { titre: '📋 Suivi des joueurs', cmds: [['sanction', { voir: 'voirSanctions', 'mute-actif': 'voirSanctions' }], ['info-joueur', 'infoJoueur']] },
   { titre: '🧹 Gestion des salons', cmds: [['clear', 'clear'], ['lockdown', 'lockdown'], ['unlock', 'lockdown'], ['slowmode', 'lockdown']] },
-  { titre: '⚙️ Configuration et réseau', cmds: [['config', 'config'], ['mots', 'mots'], ['reseau', 'reseau'], ['verification', 'verification']] },
+  { titre: '⚙️ Configuration et réseau', cmds: [['config', 'config'], ['mots', 'mots'], ['reseau', 'reseau'], ['verification', 'verification'], ['whitelist', 'whitelist'], ['unwhitelist', 'whitelist'], ['whitelist-liste', 'whitelist']] },
   { titre: '📖 Aide', cmds: [['commandes', 'aide']] },
 ];
 
@@ -95,6 +95,7 @@ const CAPACITES = [
   ['igDiagnostic', '/ig diagnostic'],
   ['reseau', '/reseau synchroniser'],
   ['verification', '/verification'],
+  ['whitelist', '/whitelist, /unwhitelist, /whitelist-liste'],
 ];
 
 /* ---------- Commandes cliquables ---------- */
@@ -248,7 +249,7 @@ function embedGrades() {
     {
       name: '👁️ Visibilité des réponses',
       value:
-        'Les réponses des commandes sont **visibles par tout le salon**. Elles restent **privées** pour `/commandes`, `/clear`, `/config voir`, `/mots liste`, `/ig diagnostic`, ainsi que pour les refus et les erreurs. ' +
+        'Les réponses des commandes sont **visibles par tout le salon**. Elles restent **privées** pour `/commandes`, `/clear`, `/config voir`, `/mots liste`, `/whitelist-liste`, `/ig diagnostic`, ainsi que pour les refus et les erreurs. ' +
         'Toutes les commandes (réussies ou non) sont enregistrées dans le salon des commandes.',
     },
     {
@@ -262,7 +263,7 @@ function embedGrades() {
     {
       name: '🛡️ Protections automatiques',
       value:
-        'Anti-raid, anti-spam, filtre de mots (insultes : avertissement, propos graves : mute), anti-nuke, bots ajoutés sans autorisation expulsés, limite de sanctions par membre du staff, ' +
+        'Anti-raid, anti-spam, filtre de mots (insultes : avertissement, propos graves : mute), anti-nuke (les membres et bots de la liste blanche en sont exemptés), bots ajoutés sans autorisation expulsés, limite de sanctions par membre du staff, ' +
         "paliers d'avertissements (3 = mute d'1 h, 5 = expulsion) et fin automatique des bans temporaires.",
     },
   );
