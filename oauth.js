@@ -149,23 +149,23 @@ function page(titre, corpsHtml) {
 const pageResultat = (r) => page(`${r.ok ? '✅' : '❌'} ${r.titre}`, `<p>${echapper(r.message)}</p>`);
 
 const PAGE_CONFIDENTIALITE = page('Politique de confidentialité', `
-<p>Ce bot Discord sert à la modération des serveurs Bruxelles RP et de leur serveur ER:LC.</p>
+<p>Ce service appartient à la communauté de jeu de rôle Bruxelles RP. Il sert à vérifier les comptes Roblox de ses membres et à modérer ses serveurs, y compris son serveur privé ER:LC.</p>
 <h2>Données utilisées</h2>
 <ul><li>Ton identifiant et ton pseudo Roblox, fournis par Roblox quand tu autorises la connexion (autorisations « openid » et « profile »).</li>
-<li>Ton identifiant Discord, pour lier ton compte Discord à ton compte Roblox.</li></ul>
+<li>Ton identifiant de membre sur le serveur de la communauté, pour lier ton profil de membre à ton compte Roblox.</li></ul>
 <h2>Ce que nous ne faisons pas</h2>
 <ul><li>Nous ne recevons jamais ton mot de passe Roblox.</li><li>Nous ne conservons aucun jeton d'accès : ils sont révoqués dès que ton identifiant est lu.</li>
 <li>Nous ne vendons ni ne partageons ces données.</li></ul>
 <h2>Utilisation et conservation</h2>
-<p>Ces données servent à vérifier ton compte, à te renommer sur Discord, à appliquer les sanctions (y compris en jeu) et à refuser l'accès au jeu aux comptes non vérifiés. Elles sont conservées tant que tu es membre du serveur.</p>
+<p>Ces données servent à vérifier ton compte, à renommer ton profil de membre avec ton pseudo Roblox, à appliquer les sanctions de la communauté (y compris en jeu) et à refuser l'accès au serveur de jeu privé aux comptes non vérifiés. Elles sont conservées tant que tu es membre de la communauté.</p>
 <h2>Tes droits</h2>
-<p>Tu peux demander au staff du serveur de supprimer ta vérification à tout moment. Tu peux aussi retirer l'autorisation donnée à l'application dans les réglages de ton compte Roblox.</p>`);
+<p>Tu peux demander au staff de la communauté de supprimer ta vérification à tout moment. Tu peux aussi retirer l'autorisation donnée à l'application dans les réglages de ton compte Roblox.</p>`);
 
 const PAGE_CONDITIONS = page("Conditions d'utilisation", `
-<p>La vérification Roblox est réservée aux membres des serveurs Bruxelles RP.</p>
+<p>La vérification Roblox est réservée aux membres de la communauté Bruxelles RP.</p>
 <ul><li>Tu ne peux lier que ton propre compte Roblox, et un compte Roblox ne peut être lié qu'à un seul membre.</li>
-<li>Les comptes non vérifiés peuvent être refusés sur le serveur ER:LC.</li>
-<li>Le staff peut retirer une vérification en cas d'abus. Les sanctions du réseau s'appliquent à tous les serveurs.</li>
+<li>Les comptes non vérifiés peuvent être refusés sur le serveur de jeu privé ER:LC.</li>
+<li>Le staff peut retirer une vérification en cas d'abus. Les sanctions de la communauté s'appliquent à tous ses serveurs.</li>
 <li>Le service est fourni tel quel, sans garantie de disponibilité.</li></ul>`);
 
 /* ---------- Serveur web ---------- */

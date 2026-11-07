@@ -72,6 +72,13 @@ async function initDatabase() {
       discord_id TEXT NOT NULL,
       expire INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS whitelist (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      added_by TEXT NOT NULL,
+      added_at INTEGER NOT NULL,
+      PRIMARY KEY (guild_id, user_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS settings (
       guild_id TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -316,6 +323,32 @@ async function purgeOauthAttente(now) {
   await db.execute({ sql: `DELETE FROM oauth_attente WHERE expire < ?`, args: [now] });
 }
 
+/* ---------- Liste blanche de l'anti-nuke (guild_id '*' = tous les serveurs) ---------- */
+async function addWhitelist(guildId, userId, addedBy) {
+  const r = await db.execute({
+    sql: `INSERT OR IGNORE INTO whitelist (guild_id, user_id, added_by, added_at) VALUES (?, ?, ?, ?)`,
+    args: [guildId, userId, addedBy, Date.now()],
+  });
+  return r.rowsAffected > 0;
+}
+
+async function removeWhitelist(guildId, userId) {
+  const r = await db.execute({ sql: `DELETE FROM whitelist WHERE guild_id = ? AND user_id = ?`, args: [guildId, userId] });
+  return r.rowsAffected > 0;
+}
+
+async function estWhitelist(guildId, userId) {
+  const r = await db.execute({ sql: `SELECT 1 AS ok FROM whitelist WHERE user_id = ? AND guild_id IN (?, '*') LIMIT 1`, args: [userId, guildId] });
+  return r.rows.length > 0;
+}
+
+async function listWhitelist(guildId = null) {
+  const r = guildId
+    ? await db.execute({ sql: `SELECT * FROM whitelist WHERE guild_id IN (?, '*') ORDER BY guild_id, added_at`, args: [guildId] })
+    : await db.execute({ sql: `SELECT * FROM whitelist ORDER BY guild_id, added_at`, args: [] });
+  return r.rows;
+}
+
 /* ---------- Réglages ---------- */
 async function getSetting(guildId, key) {
   const r = await db.execute({ sql: `SELECT value FROM settings WHERE guild_id = ? AND key = ?`, args: [guildId, key] });
@@ -340,5 +373,6 @@ module.exports = {
   setLienRoblox, getLienRoblox, addAttenteJeu, getAttenteJeu, deleteAttenteJeu, incrAttenteJeu,
   setVerification, getVerificationParDiscord, getVerificationParRoblox, deleteVerification, countVerifications,
   addOauthAttente, takeOauthAttente, purgeOauthAttente,
+  addWhitelist, removeWhitelist, estWhitelist, listWhitelist,
   getSetting, setSetting,
 };

@@ -44,6 +44,7 @@ module.exports = {
     igDiagnostic: 5,  // /ig diagnostic
     reseau: 5,        // /reseau synchroniser
     verification: 4,  // /verification (panneau, jeu, statut, retirer)
+    whitelist: 5,     // /whitelist, /unwhitelist, /whitelist-liste (anti-nuke) : Fondateur seulement
   },
 
   // Durée maximale de mute selon le niveau (Discord limite de toute façon les timeouts à 28 jours)

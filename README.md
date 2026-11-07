@@ -110,3 +110,8 @@ Solution : dans Render > Settings > Start Command, mettre `npm start`. Le bot ou
 - Sur les autres serveurs du réseau, un nouveau venu est expulsé s'il n'est pas sur le serveur principal ou s'il a toujours le rôle « non vérifié ». Un MP lui explique la raison. Les membres arrivés avant la mise en place du système n'ont pas ce rôle : ils ne sont pas bloqués.
 - Le rôle du bot doit être au-dessus des deux rôles pour pouvoir les donner et les retirer.
 - `/verification retirer @membre` lui redonne le rôle « non vérifié ».
+
+## Liste blanche de l'anti-nuke
+- `/whitelist membre:@x serveur:…` et `/unwhitelist` (Fondateur seulement) exemptent un membre ou un bot de l'anti-nuke sur le serveur choisi (liste proposée automatiquement, ou « Tous les serveurs »). `/whitelist-liste` affiche qui est exempté et où.
+- Un membre exempté peut supprimer des salons ou des rôles, bannir en masse, ou ajouter des bots sans être sanctionné. Un bot exempté peut être ajouté sans être expulsé et peut agir librement.
+- Chaque ajout ou retrait est signalé dans les logs (avec mention des responsables). Si un compte exempté est piraté, il n'y a plus de protection : garde la liste courte et retire les membres qui n'en ont plus besoin.
