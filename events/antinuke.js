@@ -1,5 +1,6 @@
 const { Events, AuditLogEvent, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const config = require('../config');
+const base = require('../database');
 const { COULEURS, envoyerLog, niveau } = require('../utils');
 
 const compteurs = new Map(); // "guildId:executantId:type" -> [timestamps]
@@ -15,9 +16,11 @@ const PERMS_DANGEREUSES = [
 
 const attendre = (ms) => new Promise(r => setTimeout(r, ms));
 
-function exempte(guild, userId) {
-  return userId === guild.client.user.id || userId === guild.ownerId
-    || config.ANTINUKE.utilisateursExemptes.includes(userId) || config.SUPER_UTILISATEURS.includes(userId);
+// Exempté de l'anti-nuke : le bot, le propriétaire, la config, ou la liste blanche (/whitelist) de ce serveur
+async function exempte(guild, userId) {
+  if (userId === guild.client.user.id || userId === guild.ownerId
+    || config.ANTINUKE.utilisateursExemptes.includes(userId) || config.SUPER_UTILISATEURS.includes(userId)) return true;
+  return base.estWhitelist(guild.id, userId).catch(() => false);
 }
 
 async function verifier(guild, typeAudit, cibleId, action, max) {
@@ -31,7 +34,7 @@ async function verifier(guild, typeAudit, cibleId, action, max) {
   if (!entree || !entree.executor) return;
 
   const exec = entree.executor;
-  if (exempte(guild, exec.id)) return;
+  if (await exempte(guild, exec.id)) return;
 
   const cle = `${guild.id}:${exec.id}:${typeAudit}`;
   const now = Date.now();
@@ -64,6 +67,7 @@ async function controlerAjoutBot(membre) {
   const cfg = config.ANTINUKE;
   const guild = membre.guild;
   if (!cfg.actif || !cfg.bloquerAjoutBots || !membre.user.bot || membre.id === guild.client.user.id) return;
+  if (await base.estWhitelist(guild.id, membre.id).catch(() => false)) return; // bot sur liste blanche : accepté
 
   await attendre(800);
   const journal = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 6 }).catch(() => null);
@@ -71,7 +75,7 @@ async function controlerAjoutBot(membre) {
   const exec = entree?.executor;
 
   if (exec) {
-    if (exempte(guild, exec.id)) return;
+    if (await exempte(guild, exec.id)) return;
     const execMembre = await guild.members.fetch(exec.id).catch(() => null);
     if (execMembre && niveau(execMembre) >= 5) return;
   }
