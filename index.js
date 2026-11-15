@@ -1,3 +1,8 @@
+// Supprime une éventuelle variable ERLC_API_KEY vide héritée de PM2.
+if (!process.env.ERLC_API_KEY?.trim()) {
+  delete process.env.ERLC_API_KEY;
+}
+
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
